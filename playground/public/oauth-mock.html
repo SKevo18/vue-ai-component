@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mock sign-in</title>
+    <style>
+      body { font: 15px system-ui, sans-serif; margin: 40px auto; max-width: 420px; padding: 0 16px; }
+      code { display: block; margin: 12px 0; padding: 10px; background: #f2f2f4; border-radius: 6px; user-select: all; }
+    </style>
+  </head>
+  <body>
+    <h1>Mock sign-in</h1>
+    <p id="text">Copy this code and paste it into the playground:</p>
+    <code id="code">badger-code-1234567890#otterstate</code>
+    <script>
+      if (new URLSearchParams(location.search).has("device")) {
+        document.getElementById("text").textContent = "Device sign-in: the playground confirms by itself after a few seconds.";
+        document.getElementById("code").textContent = "OTTR-4821";
+      }
+    </script>
+  </body>
+</html>

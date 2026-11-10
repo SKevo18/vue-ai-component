@@ -1,0 +1,44 @@
+import "./styles/index.css";
+
+export { createAi, useAi, AI_KEY } from "./ai";
+export type { Ai, AiOptions, AiState, AttachedFile, ChatError, ComposeOptions, ContextItem, Decision, ModelList, PendingApproval, PickerItem, ResourcePreview, Suggestion } from "./ai";
+
+export type { AiBackend, AiConnection, AiModel, ChatTransport, ChatTransportRequest, ConnectionKind, LoginResult, LoginStart } from "./backend/types";
+export { createBrowserKeys, mergeBackends } from "./backend/browser-keys";
+export type { BrowserKeys, BrowserKeysOptions, KeyProvider } from "./backend/browser-keys";
+
+export { createMcpClient } from "./mcp/client";
+export type { McpCallOptions, McpClient, McpClientOptions, McpListOptions, McpProgress, McpRequestOptions } from "./mcp/client";
+export { MCP_PROTOCOL_VERSION, McpError } from "./mcp/types";
+export type { McpContent, McpErrorKind, McpResource, McpResourceContents, McpResourceTemplate, McpServerInfo, McpTool, McpToolAnnotations, McpToolResult } from "./mcp/types";
+
+export { createBrowserToolHost } from "./browser/tool-host";
+export type { BrowserCall, BrowserCallResult, BrowserHandler, BrowserToolHost, BrowserToolHostOptions } from "./browser/tool-host";
+
+export { createLocalConversationStore } from "./stores/conversations";
+export type { ConversationMeta, ConversationStore, LocalConversationStoreOptions, StoredConversation } from "./stores/conversations";
+export { createLocalPreferencesStore, DEFAULT_PREFERENCES } from "./stores/preferences";
+export type { AiPreferences, PreferencesStore } from "./stores/preferences";
+
+export type { Activity } from "./core/agent";
+export type { Approval, Entry, ImageRef, ResourceLink, ResourceRef, ToolEntry, ToolStatus, UserEntry, AssistantEntry, ReminderEntry } from "./core/entries";
+export type { HarnessTool, ToolContext, ToolResult } from "./core/tools";
+export type { ApprovalPreview, ApprovalPreviewField, ApprovalPreviewContext, ApprovalPreviewHook } from "./core/approval";
+export type { LocalNamespace, NamespaceContent, NamespaceRegistry, ReadOptions, ReadResult } from "./core/namespaces";
+export type { PromptSkill } from "./core/prompt";
+export type { PlanStep, PlanStatus } from "./core/plan";
+export { AiError } from "./core/types";
+export type { AiErrorKind, Dialect, ImageContent, JsonSchema, ToolCall, Usage } from "./core/types";
+export type { PdfOptions } from "./core/attachments";
+
+export { en, sk } from "./i18n";
+export type { Locale, Messages, MessageOverrides, Translate } from "./i18n";
+export { renderMarkdown, sanitizeHtml, resourceLinks } from "./ui/markdown";
+export { default as AiSidebar } from "./components/AiSidebar.vue";
+export { default as AiChatLog } from "./components/AiChatLog.vue";
+export { default as AiComposer } from "./components/AiComposer.vue";
+export { default as AiHistory } from "./components/AiHistory.vue";
+export { default as AiModelSwitch } from "./components/AiModelSwitch.vue";
+export { default as AiSettings } from "./components/AiSettings.vue";
+export { default as AiMarkdown } from "./components/AiMarkdown.vue";
+export { default as AiResourcePreview } from "./components/AiResourcePreview.vue";

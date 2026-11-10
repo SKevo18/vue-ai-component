@@ -1,0 +1,130 @@
+@import "../src/styles/index.css";
+
+:root[data-theme="dark"] {
+  --vc-bg: #18181b;
+  --vc-bg-subtle: #121214;
+  --vc-bg-muted: #26262b;
+  --vc-bg-active: #303036;
+  --vc-fg: #d4d4d8;
+  --vc-fg-strong: #f4f4f5;
+  --vc-fg-muted: #a1a1aa;
+  --vc-fg-faint: #71717a;
+  --vc-border: #2a2a30;
+  --vc-border-strong: #3a3a42;
+  --vc-accent: #818cf8;
+  --vc-accent-fg: #0b0b10;
+  --vc-accent-soft: #25264a;
+  --vc-danger: #f97066;
+  --vc-danger-soft: #3a1717;
+  --vc-warning: #fdb022;
+  --vc-warning-soft: #3a2a0c;
+  --vc-success: #47cd89;
+  --vc-code-bg: #222227;
+  --vc-code-fg: #e4e4e7;
+  --vc-shadow-pop: 0 8px 28px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.08);
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--vc-bg);
+  color: var(--vc-fg);
+  font-family: var(--vc-font);
+}
+.pg {
+  min-height: 100vh;
+  transition: padding-right 0.15s;
+}
+.pg-header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 52px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--vc-border);
+  background: var(--vc-bg);
+}
+.pg-spacer {
+  flex: 1;
+}
+.pg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--vc-fg);
+  cursor: pointer;
+}
+.pg-btn:hover,
+.pg-btn[aria-pressed="true"] {
+  background: var(--vc-bg-muted);
+}
+.pg-btn svg {
+  width: 18px;
+  height: 18px;
+}
+.pg-main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+}
+.pg-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+.pg-list button {
+  padding: 8px 12px;
+  border: 1px solid var(--vc-border-strong);
+  border-radius: 8px;
+  background: var(--vc-bg);
+  color: var(--vc-fg-strong);
+  cursor: pointer;
+}
+.pg-list button.active {
+  border-color: var(--vc-accent);
+  background: var(--vc-accent-soft);
+}
+.pg-text-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--vc-accent);
+  font: inherit;
+  cursor: pointer;
+}
+.pg-muted {
+  color: var(--vc-fg-muted);
+}
+.pg-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 40px 12px;
+  background: rgb(0 0 0 / 0.4);
+}
+.pg-dialog {
+  width: min(680px, 100%);
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--vc-bg);
+}
+.pg-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}

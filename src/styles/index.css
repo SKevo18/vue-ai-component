@@ -1,0 +1,376 @@
+:where(:root) {
+  --vc-bg: #ffffff;
+  --vc-bg-subtle: #f7f7f8;
+  --vc-bg-muted: #eeeef0;
+  --vc-bg-active: #e4e4e8;
+  --vc-fg: #3a3a40;
+  --vc-fg-strong: #16161a;
+  --vc-fg-muted: #6b6b75;
+  --vc-fg-faint: #9a9aa3;
+  --vc-border: #e6e6ea;
+  --vc-border-strong: #d2d2d8;
+  --vc-accent: #4f46e5;
+  --vc-accent-fg: #ffffff;
+  --vc-accent-soft: #ecebfd;
+  --vc-danger: #d92d20;
+  --vc-danger-soft: #fdecea;
+  --vc-warning: #b54708;
+  --vc-warning-soft: #fef3e2;
+  --vc-success: #12875a;
+  --vc-radius: 10px;
+  --vc-radius-sm: 6px;
+  --vc-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --vc-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --vc-shadow-pop: 0 8px 28px rgb(0 0 0 / 0.14), 0 0 0 1px rgb(0 0 0 / 0.06);
+  --vc-ring: 0 0 0 3px color-mix(in srgb, var(--vc-accent) 25%, transparent);
+  --vc-code-bg: #f4f4f6;
+  --vc-code-fg: #24292f;
+  --vc-code-keyword: #cf222e;
+  --vc-code-string: #0a3069;
+  --vc-code-number: #0550ae;
+  --vc-code-comment: #6e7781;
+  --vc-code-function: #8250df;
+  --vc-code-type: #953800;
+  --vc-code-attr: #116329;
+  --vc-code-tag: #116329;
+
+  --ai-sidebar-width: 400px;
+  --ai-sidebar-top: 0px;
+  --ai-z: 900;
+  --ai-bubble-bg: var(--vc-accent-soft);
+  --ai-bubble-fg: var(--vc-fg-strong);
+}
+
+.ai-root,
+.ai-root * {
+  box-sizing: border-box;
+}
+
+.ai-root {
+  font-family: var(--vc-font);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--vc-fg);
+  -webkit-text-size-adjust: 100%;
+}
+
+.ai-root button {
+  font: inherit;
+  color: inherit;
+}
+
+.ai-icon-btn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--vc-radius-sm);
+  background: transparent;
+  color: var(--vc-fg-muted);
+  cursor: pointer;
+  transition: background-color 0.12s, color 0.12s;
+}
+.ai-icon-btn:hover:not(:disabled),
+.ai-icon-btn[aria-pressed="true"] {
+  background: var(--vc-bg-muted);
+  color: var(--vc-fg-strong);
+}
+.ai-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.ai-icon-btn.ai-sm {
+  width: 26px;
+  height: 26px;
+}
+.ai-icon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+.ai-icon-btn.ai-sm svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ai-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--vc-border-strong);
+  border-radius: var(--vc-radius-sm);
+  background: var(--vc-bg);
+  color: var(--vc-fg-strong);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.12s, border-color 0.12s;
+}
+.ai-btn:hover:not(:disabled) {
+  background: var(--vc-bg-muted);
+}
+.ai-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ai-btn svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.ai-btn.ai-primary {
+  border-color: var(--vc-accent);
+  background: var(--vc-accent);
+  color: var(--vc-accent-fg);
+}
+.ai-btn.ai-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--vc-accent) 88%, black);
+}
+.ai-btn.ai-ghost {
+  border-color: transparent;
+  background: transparent;
+}
+.ai-btn.ai-danger {
+  color: var(--vc-danger);
+}
+.ai-btn.ai-sm {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12.5px;
+}
+
+.ai-input {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--vc-border-strong);
+  border-radius: var(--vc-radius-sm);
+  background: var(--vc-bg);
+  color: var(--vc-fg-strong);
+  font: inherit;
+  font-size: 13.5px;
+  outline: none;
+}
+.ai-input:focus {
+  border-color: var(--vc-accent);
+  box-shadow: var(--vc-ring);
+}
+.ai-input::placeholder {
+  color: var(--vc-fg-faint);
+}
+
+:focus-visible {
+  outline: none;
+}
+.ai-root :is(button, a, [tabindex]):focus-visible {
+  box-shadow: var(--vc-ring);
+}
+
+.ai-spinner {
+  display: inline-block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: ai-spin 0.7s linear infinite;
+}
+@keyframes ai-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ai-popover {
+  position: fixed;
+  z-index: calc(var(--ai-z) + 20);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--vc-radius);
+  background: var(--vc-bg);
+  box-shadow: var(--vc-shadow-pop);
+  color: var(--vc-fg);
+  font-family: var(--vc-font);
+  font-size: 13px;
+}
+
+.ai-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--vc-fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.ai-menu-item:hover,
+.ai-menu-item[data-active="true"] {
+  background: var(--vc-bg-muted);
+  color: var(--vc-fg-strong);
+}
+.ai-menu-item svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  color: var(--vc-fg-muted);
+}
+.ai-menu-label {
+  padding: 6px 10px 2px;
+  color: var(--vc-fg-faint);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.ai-truncate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-tooltip {
+  position: fixed;
+  z-index: 10000;
+  max-width: 260px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--vc-fg-strong);
+  color: var(--vc-bg);
+  font-family: var(--vc-font);
+  font-size: 12px;
+  line-height: 1.4;
+  pointer-events: none;
+}
+.ai-tooltip kbd {
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--vc-bg) 20%, transparent);
+  font-family: var(--vc-font-mono);
+  font-size: 11px;
+}
+
+.ai-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  cursor: pointer;
+  user-select: none;
+}
+.ai-switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.ai-switch-track {
+  position: relative;
+  flex: none;
+  width: 28px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--vc-border-strong);
+  transition: background-color 0.15s;
+}
+.ai-switch-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--vc-bg);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+  transition: transform 0.15s;
+}
+.ai-switch input:checked + .ai-switch-track {
+  background: var(--vc-accent);
+}
+.ai-switch input:checked + .ai-switch-track::after {
+  transform: translateX(12px);
+}
+.ai-switch input:focus-visible + .ai-switch-track {
+  box-shadow: var(--vc-ring);
+}
+
+.ai-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  height: 24px;
+  padding: 0 4px 0 7px;
+  border-radius: 6px;
+  background: var(--vc-bg-muted);
+  color: var(--vc-fg);
+  font-size: 12px;
+}
+.ai-chip > svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  color: var(--vc-fg-muted);
+}
+.ai-chip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--vc-fg-muted);
+  cursor: pointer;
+}
+.ai-chip button:hover {
+  background: var(--vc-bg-active);
+  color: var(--vc-fg-strong);
+}
+.ai-chip button svg {
+  width: 12px;
+  height: 12px;
+}
+a.ai-chip,
+button.ai-chip {
+  border: 0;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* text of at least 16px keeps iOS from zooming into a focused input; iOS Safari is matched explicitly too */
+@media (pointer: coarse), (hover: none) {
+  .ai-root :is(input, textarea, select),
+  .ai-root .ai-textarea {
+    font-size: 16px;
+  }
+  .ai-icon-btn {
+    width: 36px;
+    height: 36px;
+  }
+}
+@supports (-webkit-touch-callout: none) {
+  .ai-root :is(input, textarea, select),
+  .ai-root .ai-textarea {
+    font-size: 16px;
+  }
+}
