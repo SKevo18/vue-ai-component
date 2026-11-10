@@ -49,7 +49,7 @@ async function simulateRelay() {
           <li v-for="(u, i) in opened" :key="i"><code>{{ u }}</code></li>
         </ul>
       </section>
-      <p class="pg-muted">Tab id: <code>{{ toolHost.tabId }}</code> · MCP: <code>{{ ai.state.mcpInfo?.serverInfo.name ?? "not connected yet" }}</code></p>
+      <p class="pg-muted">Tab id: <code>{{ toolHost.tabId }}</code> · MCP: <code>{{ ai.state.mcp.burrows?.info?.serverInfo.name ?? "not connected yet" }}</code></p>
       <p v-for="i in 12" :key="i" class="pg-muted">Filler paragraph {{ i }} so the page can scroll behind the sheet. Badgers dig, otters swim, herons wait.</p>
     </main>
     <AiSidebar v-model:open="open" @width="width = $event" />

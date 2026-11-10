@@ -19,6 +19,8 @@ export interface ToolContext {
 
 export interface HarnessTool {
   name: string;
+  /** set for MCP tools; `name` gains a `<server>__` prefix when two servers offer the same tool */
+  mcp?: { server: string; tool: string };
   title?: string;
   description: string;
   parameters: JsonSchema;

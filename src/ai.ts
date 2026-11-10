@@ -15,7 +15,7 @@ import { conversationExport } from "./harness/export";
 import { createPersistence } from "./harness/persistence";
 import type { Ai, AiOptions, AiState, ChatError, ComposeOptions, Decision } from "./harness/types";
 import { createTranslator } from "./i18n";
-import { createMcpClient, type McpClient, type McpClientOptions } from "./mcp/client";
+import { createMcpServers, serverErrors } from "./mcp/servers";
 import { connectionChat } from "./providers";
 import { createLocalConversationStore, type StoredConversation } from "./stores/conversations";
 import { createLocalPreferencesStore, DEFAULT_PREFERENCES, type AiPreferences } from "./stores/preferences";
@@ -46,14 +46,8 @@ export function createAi(options: AiOptions): Ai & { install(app: App): void } {
   configurePdf(options.pdf ?? null);
 
   const toolHost = options.toolHost ?? null;
-  const mcp: McpClient | null = !options.mcp
-    ? null
-    : "callTool" in options.mcp
-      ? options.mcp
-      : createMcpClient({
-          ...options.mcp,
-          headers: async () => ({ ...(toolHost?.headers() ?? {}), ...((await (options.mcp as McpClientOptions).headers?.()) ?? {}) }),
-        });
+  const servers = createMcpServers(options.mcp, toolHost ? () => toolHost.headers() : undefined);
+  const hasServers = Object.keys(servers.clients).length > 0;
 
   const state = reactive<AiState>({
     connections: [],
@@ -75,8 +69,7 @@ export function createAi(options: AiOptions): Ai & { install(app: App): void } {
     approval: null,
     history: [],
     draft: "",
-    mcpInfo: null,
-    mcpError: "",
+    mcp: Object.fromEntries(Object.keys(servers.clients).map((id) => [id, { info: null, error: "" }])),
     storageError: "",
     adding: [],
     attachError: "",
@@ -96,12 +89,12 @@ export function createAi(options: AiOptions): Ai & { install(app: App): void } {
   const { setPreferences, saveNow, scheduleSave, loadHistory } = persistence;
   const connections = createConnections(state, options.backend, { t, init, setPreferences });
   const { connection, model } = connections;
-  const namespaces = createNamespaceRegistry({ mcp: () => mcp, prepareImage: (image) => normaliseImage(fromBase64(image.data, image.mimeType), image.mimeType) });
+  const namespaces = createNamespaceRegistry({ mcp: hasServers ? servers : null, prepareImage: (image) => normaliseImage(fromBase64(image.data, image.mimeType), image.mimeType) });
   const attachments = createChatAttachments(state, attachmentStore, { t, namespaces, attach, saveNow });
   namespaces.register(attachments.namespace);
   for (const ns of options.namespaces ?? []) namespaces.register(ns);
-  const catalog = createCatalog(state, options, { mcp, namespaces, locale, contextItems });
-  const approvals = createApprovals(state, options, mcp);
+  const catalog = createCatalog(state, options, { servers, namespaces, locale, contextItems });
+  const approvals = createApprovals(state, options, hasServers ? servers : null);
 
   let initPromise: Promise<void> | null = null;
   let controller: AbortController | null = null;
@@ -148,7 +141,7 @@ export function createAi(options: AiOptions): Ai & { install(app: App): void } {
         loadHistory(),
         last ? conversations.load(last).then((c) => !state.entries.length && apply(c), () => undefined) : undefined,
       ]);
-      if (mcp) void catalog.tools();
+      if (hasServers) void catalog.tools();
     })();
     return initPromise;
   }
@@ -172,7 +165,8 @@ export function createAi(options: AiOptions): Ai & { install(app: App): void } {
     const conversationId = state.conversationId;
     const work = async () => {
       const list = await catalog.tools();
-      if (state.mcpError) state.error = { kind: "tools", message: t("errors.tools", { message: state.mcpError }) };
+      const mcpError = serverErrors(state.mcp);
+      if (mcpError) state.error = { kind: "tools", message: t("errors.tools", { message: mcpError }) };
       await runAgent({
         chat: connectionChat(target.connection, options.backend.transport(target.connection.id)),
         model: target.model,
@@ -306,7 +300,7 @@ export function createAi(options: AiOptions): Ai & { install(app: App): void } {
     t,
     locale,
     options,
-    mcp,
+    mcp: servers.clients,
     namespaces,
     toolHost,
     get connection() {

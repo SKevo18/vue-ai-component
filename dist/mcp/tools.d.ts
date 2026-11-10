@@ -8,4 +8,4 @@ import type { McpTool, McpToolResult } from "./types";
  */
 export declare function toolApproval(tool: McpTool): Approval;
 export declare function toolResult(result: McpToolResult, ctx: Pick<ToolContext, "saveImage">): Promise<ToolResult>;
-export declare function mcpHarnessTool(tool: McpTool, client: McpClient): HarnessTool;
+export declare function mcpHarnessTool(tool: McpTool, client: McpClient, server: string, name?: string): HarnessTool;

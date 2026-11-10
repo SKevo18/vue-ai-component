@@ -1,4 +1,4 @@
-import type { McpClient } from "../mcp/client";
+import type { McpServers } from "../mcp/servers";
 import type { McpResourceContents, McpToolResult } from "../mcp/types";
 import type { HarnessTool } from "./tools";
 export interface ApprovalPreviewField {
@@ -14,12 +14,15 @@ export interface ApprovalPreview {
     after?: string;
 }
 export interface ApprovalPreviewContext {
+    /** the server's own tool name, without a collision prefix */
     tool: Pick<HarnessTool, "name" | "title" | "parameters">;
+    /** id of the MCP server the tool comes from */
+    server?: string;
     args: Readonly<Record<string, unknown>>;
     signal: AbortSignal;
     /** reads app resources through MCP, never through app REST endpoints */
     readResource(uri: string): Promise<McpResourceContents[]>;
-    /** calls only discovered MCP tools annotated readOnlyHint: true */
+    /** calls only read-only tools of the same MCP server */
     readTool(name: string, args: Record<string, unknown>): Promise<McpToolResult>;
 }
 export type ApprovalPreviewHook = (context: ApprovalPreviewContext) => ApprovalPreview | null | undefined | Promise<ApprovalPreview | null | undefined>;
@@ -31,4 +34,4 @@ export interface ApprovalPreviewState {
     previewError?: boolean;
 }
 /** cancelling also cancels preview reads; late results never update a later approval */
-export declare function loadApprovalPreview(state: ApprovalPreviewState, hook: ApprovalPreviewHook | undefined, tool: HarnessTool, args: Record<string, unknown>, client: McpClient | null, parent: AbortSignal, isCurrent: () => boolean): () => void;
+export declare function loadApprovalPreview(state: ApprovalPreviewState, hook: ApprovalPreviewHook | undefined, tool: HarnessTool, args: Record<string, unknown>, servers: McpServers | null, parent: AbortSignal, isCurrent: () => boolean): () => void;

@@ -1,4 +1,4 @@
-import type { McpClient } from "../mcp/client";
+import type { McpServers } from "../mcp/servers";
 import type { McpResourceContents, McpToolResult } from "../mcp/types";
 import type { HarnessTool } from "./tools";
 
@@ -17,12 +17,15 @@ export interface ApprovalPreview {
 }
 
 export interface ApprovalPreviewContext {
+  /** the server's own tool name, without a collision prefix */
   tool: Pick<HarnessTool, "name" | "title" | "parameters">;
+  /** id of the MCP server the tool comes from */
+  server?: string;
   args: Readonly<Record<string, unknown>>;
   signal: AbortSignal;
   /** reads app resources through MCP, never through app REST endpoints */
   readResource(uri: string): Promise<McpResourceContents[]>;
-  /** calls only discovered MCP tools annotated readOnlyHint: true */
+  /** calls only read-only tools of the same MCP server */
   readTool(name: string, args: Record<string, unknown>): Promise<McpToolResult>;
 }
 
@@ -57,7 +60,7 @@ export interface ApprovalPreviewState {
 }
 
 /** cancelling also cancels preview reads; late results never update a later approval */
-export function loadApprovalPreview(state: ApprovalPreviewState, hook: ApprovalPreviewHook | undefined, tool: HarnessTool, args: Record<string, unknown>, client: McpClient | null, parent: AbortSignal, isCurrent: () => boolean): () => void {
+export function loadApprovalPreview(state: ApprovalPreviewState, hook: ApprovalPreviewHook | undefined, tool: HarnessTool, args: Record<string, unknown>, servers: McpServers | null, parent: AbortSignal, isCurrent: () => boolean): () => void {
   if (!hook) return () => {};
   const controller = new AbortController();
   const signal = controller.signal;
@@ -70,12 +73,14 @@ export function loadApprovalPreview(state: ApprovalPreviewState, hook: ApprovalP
   void Promise.resolve().then(() => {
     signal.throwIfAborted();
     return hook({
-      tool: { name: tool.name, title: tool.title, parameters: tool.parameters },
+      tool: { name: tool.mcp?.tool ?? tool.name, title: tool.title, parameters: tool.parameters },
+      server: tool.mcp?.server,
       args,
       signal,
       async readTool(name, input) {
         signal.throwIfAborted();
-        if (!client) throw new Error("Approval preview needs an MCP client.");
+        const client = tool.mcp && servers?.clients[tool.mcp.server];
+        if (!client) throw new Error("Approval preview needs the tool's MCP server.");
         const tools = await client.listTools({ signal });
         signal.throwIfAborted();
         if (!tools.some((entry) => entry.name === name && entry.annotations?.readOnlyHint === true)) throw new Error(`Approval preview cannot call non-read-only tool ${name}.`);
@@ -86,8 +91,8 @@ export function loadApprovalPreview(state: ApprovalPreviewState, hook: ApprovalP
       },
       async readResource(uri) {
         signal.throwIfAborted();
-        if (!client) throw new Error("Approval preview needs an MCP client.");
-        const result = await client.readResource(uri, { signal });
+        if (!servers) throw new Error("Approval preview needs an MCP client.");
+        const result = await servers.readResource(uri, { signal });
         signal.throwIfAborted();
         return result;
       },

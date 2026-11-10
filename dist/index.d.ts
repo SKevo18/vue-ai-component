@@ -6,6 +6,7 @@ export { createBrowserKeys, mergeBackends } from "./backend/browser-keys";
 export type { BrowserKeys, BrowserKeysOptions, KeyProvider } from "./backend/browser-keys";
 export { createMcpClient } from "./mcp/client";
 export type { McpCallOptions, McpClient, McpClientOptions, McpListOptions, McpProgress, McpRequestOptions } from "./mcp/client";
+export type { McpServerConfig, McpServerState } from "./mcp/servers";
 export { MCP_PROTOCOL_VERSION, McpError } from "./mcp/types";
 export type { McpContent, McpErrorKind, McpResource, McpResourceContents, McpResourceTemplate, McpServerInfo, McpTool, McpToolAnnotations, McpToolResult } from "./mcp/types";
 export { createBrowserToolHost } from "./browser/tool-host";

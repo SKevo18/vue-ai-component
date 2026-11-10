@@ -1,6 +1,6 @@
 # @skevo18/vue-ai-component
 
-A chat sidebar and agent harness for Vue 3 apps that runs the model loop in the browser. It talks to model vendors through your backend or with keys stored in the browser, and reaches your app's data and actions only through your MCP server, asking the user before writes. It exists so an app can add an assistant without running agent code on its server.
+A chat sidebar and agent harness for Vue 3 apps that runs the model loop in the browser. It talks to model vendors through your backend or with keys stored in the browser, and reaches data and actions only through the MCP servers you name, asking the user before writes. It exists so an app can add an assistant without running agent code on its server.
 
 ## Usage
 
@@ -15,7 +15,7 @@ import { createApp, h } from "vue";
 import { AiSidebar, createAi, createBrowserKeys } from "@skevo18/vue-ai-component";
 import "@skevo18/vue-ai-component/style.css";
 
-const ai = createAi({ backend: createBrowserKeys(), mcp: { url: "/api/mcp" } });
+const ai = createAi({ backend: createBrowserKeys(), mcp: { app: { url: "/api/mcp" }, docs: { url: "https://docs.example.com/mcp", credentials: "omit" } } });
 createApp({ render: () => h(AiSidebar) }).use(ai).mount("#app");
 ```
 

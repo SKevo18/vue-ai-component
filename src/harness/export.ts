@@ -28,7 +28,7 @@ export async function conversationExport({ state, stored, current, catalog, conn
   const exportedAt = new Date().toISOString();
   const data = {
     format: "vue-ai-component-conversation",
-    version: 1,
+    version: 2,
     exported_at: exportedAt,
     site: typeof location === "undefined" ? undefined : location.origin,
     conversation: {
@@ -42,7 +42,7 @@ export async function conversationExport({ state, stored, current, catalog, conn
       allowed_tools: stored.allowedTools ?? [],
       auto_approve: stored.autoApprove ?? false,
     },
-    mcp: state.mcpInfo ? { server: state.mcpInfo.serverInfo, protocol: state.mcpInfo.protocolVersion, error: state.mcpError || undefined } : { error: state.mcpError || undefined },
+    mcp: Object.fromEntries(Object.entries(state.mcp).map(([id, s]) => [id, { server: s.info?.serverInfo, protocol: s.info?.protocolVersion, error: s.error || undefined }])),
     system,
     ...(systemError ? { system_error: systemError } : {}),
     tools: specs,

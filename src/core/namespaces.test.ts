@@ -25,7 +25,7 @@ describe("namespace registry", () => {
   it("reads long MCP text in chunks with the next offset", async () => {
     const big = "otter ".repeat(10000);
     const { client, readResource } = fakeMcp({ "burrow://big": { text: big, mimeType: "text/plain" } });
-    const registry = createNamespaceRegistry({ mcp: () => client, prepareImage: async (i) => i });
+    const registry = createNamespaceRegistry({ mcp: client, prepareImage: async (i) => i });
     const first = await registry.read("burrow://big");
     expect(first.text).toHaveLength(READ_LIMIT);
     expect(first.nextOffset).toBe(READ_LIMIT);
@@ -37,7 +37,7 @@ describe("namespace registry", () => {
 
   it("routes local schemes to the registered namespace", async () => {
     const { client, readResource } = fakeMcp({});
-    const registry = createNamespaceRegistry({ mcp: () => client, prepareImage: async (i) => i });
+    const registry = createNamespaceRegistry({ mcp: client, prepareImage: async (i) => i });
     const remove = registry.register({ scheme: "den", template: "den://{name}", description: "dens", read: async (uri) => ({ text: `inside ${uri}` }) });
     expect((await registry.read("den://mossy")).text).toBe("inside den://mossy");
     remove();
@@ -48,7 +48,7 @@ describe("namespace registry", () => {
   it("returns MCP image blobs as visual input", async () => {
     const { client } = fakeMcp({ "photo://den.png": { blob: "iVBORotter", mimeType: "image/png" } });
     const prepared = vi.fn(async (i: { mimeType: string; data: string }) => ({ mimeType: "image/jpeg", data: `jpeg(${i.data})` }));
-    const registry = createNamespaceRegistry({ mcp: () => client, prepareImage: prepared });
+    const registry = createNamespaceRegistry({ mcp: client, prepareImage: prepared });
     const r = await registry.read("photo://den.png");
     expect(r.image).toEqual({ uri: "photo://den.png" });
     expect(r.text).toBeUndefined();
@@ -58,7 +58,7 @@ describe("namespace registry", () => {
   it("keeps a bounded number of MCP images and reads evicted ones again", async () => {
     const photos = Object.fromEntries(Array.from({ length: 17 }, (_, i) => [`photo://${i}`, { blob: `img${i}`, mimeType: "image/png" }]));
     const { client, readResource } = fakeMcp(photos);
-    const registry = createNamespaceRegistry({ mcp: () => client, prepareImage: async (i) => i });
+    const registry = createNamespaceRegistry({ mcp: client, prepareImage: async (i) => i });
     for (let i = 0; i < 17; i++) await registry.read(`photo://${i}`);
     expect(await registry.image({ uri: "photo://16" })).toEqual({ mimeType: "image/png", data: "img16" });
     expect(readResource).toHaveBeenCalledTimes(17);
@@ -68,14 +68,14 @@ describe("namespace registry", () => {
 
   it("decodes text blobs and describes binary ones", async () => {
     const { client } = fakeMcp({ "note://a": { blob: btoa("badger notes"), mimeType: "text/plain" }, "file://z": { blob: "AAAA", mimeType: "application/zip" } });
-    const registry = createNamespaceRegistry({ mcp: () => client, prepareImage: async (i) => i });
+    const registry = createNamespaceRegistry({ mcp: client, prepareImage: async (i) => i });
     expect((await registry.read("note://a")).text).toBe("badger notes");
     expect((await registry.read("file://z")).text).toContain("Binary content (application/zip), 3 bytes");
   });
 
   it("rejects text that is not a URI and pages on non-PDF resources", async () => {
     const { client } = fakeMcp({ "burrow://1": { text: "# Mossy Hollow" } });
-    const registry = createNamespaceRegistry({ mcp: () => client, prepareImage: async (i) => i });
+    const registry = createNamespaceRegistry({ mcp: client, prepareImage: async (i) => i });
     await expect(registry.read("mossy hollow")).rejects.toThrow(/not a URI/);
     await expect(registry.read("burrow://1", { page: 2 })).rejects.toThrow(/Only PDF/);
     await expect(registry.read("burrow://1", { limit: 0 })).rejects.toThrow(/limit must be/);

@@ -1,4 +1,4 @@
-import type { McpClient } from "../mcp/client";
+import type { McpResourceContents } from "../mcp/types";
 import type { ImageRef } from "./entries";
 import type { ImageContent } from "./types";
 export declare const READ_LIMIT = 40000;
@@ -47,7 +47,11 @@ export declare function textChunk(text: string, offset: number, limit: number): 
     nextOffset?: number;
 };
 export interface NamespaceRegistryOptions {
-    mcp(): McpClient | null;
+    mcp: {
+        readResource(uri: string, options?: {
+            signal?: AbortSignal;
+        }): Promise<McpResourceContents[]>;
+    } | null;
     prepareImage(image: ImageContent): Promise<ImageContent>;
 }
 export declare function createNamespaceRegistry(options: NamespaceRegistryOptions): NamespaceRegistry;

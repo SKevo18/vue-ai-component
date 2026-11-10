@@ -14,7 +14,7 @@ function setup() {
     connect: async () => ({ protocolVersion: "2025-11-25", serverInfo: { name: "sett", version: "1" }, capabilities: {} }),
     listTools: async () => [{ name: "paint_badger", inputSchema: { type: "object" }, _meta: { approval: "ask" } }],
   } as unknown as McpClient;
-  const ai = componentAi({ mcp, approvalPreview: (input) => { context = input; return deferred.promise; } }, { transport: () => scriptedTransport((input) => toolOutputs(input).length ? { text: "Finished." } : { calls: [{ name: "paint_badger", args: { color: "blue" } }] }) });
+  const ai = componentAi({ mcp: { sett: mcp }, approvalPreview: (input) => { context = input; return deferred.promise; } }, { transport: () => scriptedTransport((input) => toolOutputs(input).length ? { text: "Finished." } : { calls: [{ name: "paint_badger", args: { color: "blue" } }] }) });
   return { ai, callTool, deferred, context: () => context };
 }
 

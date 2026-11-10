@@ -24,6 +24,11 @@ function memoryStores() {
   return { saved, conversations, preferences: { load: async () => prefs, save: async (p: AiPreferences) => void (prefs = p) } };
 }
 
+async function waitFor(check: () => boolean) {
+  for (let i = 0; i < 200 && !check(); i++) await new Promise((r) => setTimeout(r, 10));
+  expect(check()).toBe(true);
+}
+
 function script(input: ResponsesInputItem[], body: Record<string, unknown>): FakeTurn {
   const user = lastUser(input);
   const outputs = toolOutputs(input).length;
@@ -67,7 +72,7 @@ describe.skipIf(!go)("harness run against the fixture server", () => {
     };
     ai = createAi({
       backend,
-      mcp: { url: fixture.url, headers: () => ({ Authorization: `Bearer ${FIXTURE_TOKEN}` }) },
+      mcp: { burrows: { url: fixture.url, headers: () => ({ Authorization: `Bearer ${FIXTURE_TOKEN}` }) } },
       toolHost: host,
       conversations: stores.conversations,
       preferences: stores.preferences,
@@ -77,11 +82,6 @@ describe.skipIf(!go)("harness run against the fixture server", () => {
     await ai.init();
   });
   afterAll(() => fixture?.stop());
-
-  async function waitFor(check: () => boolean) {
-    for (let i = 0; i < 200 && !check(); i++) await new Promise((r) => setTimeout(r, 10));
-    expect(check()).toBe(true);
-  }
 
   it("knows the MCP tool titles right after init, before any run", async () => {
     await waitFor(() => Object.keys(ai.state.toolTitles).length > 0);
@@ -186,7 +186,7 @@ describe.skipIf(!go)("harness run against the fixture server", () => {
     const { filename, json } = await ai.exportConversation();
     const data = JSON.parse(json);
     expect(filename).toMatch(/^ai-conversation-\d{8}-\d{6}-[\w-]{8}\.json$/);
-    expect(data).toMatchObject({ format: "vue-ai-component-conversation", version: 1, conversation: { id: ai.state.conversationId, title: "echo for export", connection: "otter" } });
+    expect(data).toMatchObject({ format: "vue-ai-component-conversation", version: 2, conversation: { id: ai.state.conversationId, title: "echo for export", connection: "otter" }, mcp: { burrows: { protocol: expect.any(String) } } });
     expect(data.system).toContain("badger burrow registry");
     expect(data.tools.map((t: { name: string }) => t.name)).toEqual(expect.arrayContaining(["read", "rename_burrow"]));
     expect(data.entries.map((e: { role: string }) => e.role)).toEqual(["user", "assistant"]);
@@ -206,5 +206,58 @@ describe.skipIf(!go)("harness run against the fixture server", () => {
     const before = bodies.length;
     expect(await ai.complete("summarise", "otters hold paws")).toBe("echo otters hold paws (0 tool results so far)");
     expect(bodies[before]!.tools).toBeUndefined();
+  });
+});
+
+describe.skipIf(!go)("harness run against two MCP servers", () => {
+  let fixture: Fixture;
+  let ai: Ai;
+
+  beforeAll(async () => {
+    fixture = await startFixture();
+    const headers = () => ({ Authorization: `Bearer ${FIXTURE_TOKEN}` });
+    const transport = scriptedTransport((input, body) => {
+      const user = lastUser(input);
+      const sinceUser = input.length - 1 - [...input].reverse().findIndex((i) => i.role === "user");
+      const fresh = toolOutputs(input.slice(sinceUser));
+      if (user.startsWith("rename")) return fresh.length ? { text: `Result: ${fresh.at(-1)}` } : { calls: [{ name: "river__rename_burrow", args: { id: 3, name: "Reed Den" } }] };
+      return { text: String(body.instructions) };
+    });
+    const stores = memoryStores();
+    ai = createAi({
+      backend: {
+        connections: async () => [{ id: "otter", kind: "site", dialect: "responses", name: "Otter AI", connected: true, enabled: true }],
+        models: async () => [{ id: "otter-1" }],
+        transport: () => transport,
+      },
+      mcp: { den: { url: fixture.url, headers }, river: { url: fixture.url, headers } },
+      conversations: stores.conversations,
+      preferences: stores.preferences,
+      storagePrefix: "multi:",
+    });
+    await ai.init();
+  });
+  afterAll(() => fixture?.stop());
+
+  it("prefixes the tools both servers offer and runs a prefixed call", async () => {
+    const names = (await ai.tools()).map((t) => t.name);
+    expect(names).toEqual(expect.arrayContaining(["den__rename_burrow", "river__rename_burrow", "read"]));
+    expect(names).not.toContain("rename_burrow");
+    const run = ai.send("rename burrow 3");
+    await waitFor(() => ai.state.approval !== null);
+    expect(ai.state.approval).toMatchObject({ tool: "river__rename_burrow", args: { id: 3, name: "Reed Den" } });
+    ai.decide("approve");
+    await run;
+    expect(ai.state.entries.at(-1)).toMatchObject({ role: "assistant", content: "Result: Renamed burrow 3 to Reed Den." });
+    expect(ai.state.mcp).toMatchObject({ den: { error: "" }, river: { error: "" } });
+  });
+
+  it("puts each server's instructions under its id and reads resources from either", async () => {
+    await ai.newChat();
+    await ai.send("prompt");
+    const prompt = (ai.state.entries.at(-1) as { content: string }).content;
+    expect(prompt).toContain("## den\nYou manage the badger burrow registry of Otterfield.");
+    expect(prompt).toContain("## river\nYou manage the badger burrow registry of Otterfield.");
+    expect((await ai.read("burrow://1")).text).toContain("Mossy Hollow");
   });
 });

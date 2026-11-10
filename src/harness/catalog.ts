@@ -7,8 +7,9 @@ import type { HarnessTool } from "../core/tools";
 import { errorText } from "../core/types";
 import type { Locale } from "../i18n";
 import type { McpClient } from "../mcp/client";
+import type { McpServers } from "../mcp/servers";
 import { mcpHarnessTool } from "../mcp/tools";
-import type { McpResource } from "../mcp/types";
+import type { McpResource, McpResourceTemplate, McpTool } from "../mcp/types";
 import type { AiOptions, AiState, PickerItem } from "./types";
 
 export interface Catalog {
@@ -19,7 +20,7 @@ export interface Catalog {
 }
 
 interface Dependencies {
-  mcp: McpClient | null;
+  servers: McpServers;
   namespaces: NamespaceRegistry;
   locale(): Locale;
   contextItems: ComputedRef<ResourceRef[]>;
@@ -27,35 +28,53 @@ interface Dependencies {
 
 const SKILL = /^skill:\/\//i;
 
-export function createCatalog(state: AiState, options: AiOptions, { mcp, namespaces, locale, contextItems }: Dependencies): Catalog {
+export function createCatalog(state: AiState, options: AiOptions, { servers, namespaces, locale, contextItems }: Dependencies): Catalog {
   let toolsPromise: Promise<HarnessTool[]> | null = null;
+  const entries = Object.entries(servers.clients);
 
-  async function mcpTools(refresh: boolean): Promise<HarnessTool[]> {
-    if (!mcp) return [];
+  async function serverTools(id: string, client: McpClient, refresh: boolean): Promise<McpTool[]> {
     try {
-      state.mcpInfo = await mcp.connect();
-      const list = await mcp.listTools({ refresh });
-      state.mcpError = "";
-      return list.map((tool) => mcpHarnessTool(tool, mcp));
+      const info = await client.connect();
+      const list = await client.listTools({ refresh });
+      state.mcp[id] = { info, error: "" };
+      return list;
     } catch (e) {
-      state.mcpError = errorText(e);
+      state.mcp[id] = { info: state.mcp[id]?.info ?? null, error: errorText(e) };
       return [];
     }
   }
 
+  async function mcpTools(refresh: boolean): Promise<HarnessTool[]> {
+    const lists = await Promise.all(entries.map(async ([id, client]) => ({ id, client, tools: await serverTools(id, client, refresh) })));
+    const offered = new Map<string, number>();
+    for (const { tools } of lists) for (const tool of tools) offered.set(tool.name, (offered.get(tool.name) ?? 0) + 1);
+    return lists.flatMap(({ id, client, tools }) =>
+      tools.map((tool) => mcpHarnessTool(tool, client, id, offered.get(tool.name)! > 1 ? `${id}__${tool.name}`.slice(0, 64) : tool.name)),
+    );
+  }
+
+  async function fromServers<T>(list: (client: McpClient) => Promise<T[]>): Promise<T[]> {
+    const lists = await Promise.all(entries.map(([id, client]) => (state.mcp[id]?.info?.capabilities.resources ? list(client).catch(() => [] as T[]) : [])));
+    return lists.flat();
+  }
+
   async function skills(): Promise<PromptSkill[]> {
-    const local = options.skills ?? [];
-    if (!mcp || !state.mcpInfo?.capabilities.resources) return local;
-    const resources = await mcp.listResources().catch(() => [] as McpResource[]);
+    const resources = await fromServers<McpResource>((client) => client.listResources());
     const fromServer = resources
       .filter((r) => /^skill:\/\/.+\/SKILL\.md$/i.test(r.uri))
       .map((r) => ({ name: r.name || r.uri.replace(/^skill:\/\/|\/SKILL\.md$/gi, ""), description: r.description, uri: r.uri }));
-    return [...fromServer, ...local];
+    return [...fromServer, ...(options.skills ?? [])];
+  }
+
+  function serverInstructions(): string | undefined {
+    const connected = entries.flatMap(([id]) => (state.mcp[id]?.info ? [[id, state.mcp[id]!.info!] as const] : []));
+    if (entries.length === 1) return connected[0]?.[1].instructions;
+    return connected.flatMap(([id, info]) => (info.instructions?.trim() ? [`## ${id}\n${info.instructions.trim()}`] : [])).join("\n\n") || undefined;
   }
 
   return {
     tools(refresh = false) {
-      if (!toolsPromise || refresh || state.mcpError) {
+      if (!toolsPromise || refresh || Object.values(state.mcp).some((s) => s.error)) {
         const builtins = [readTool(namespaces), planTool];
         toolsPromise = mcpTools(refresh).then((list) => {
           state.toolTitles = Object.fromEntries(list.flatMap((tool) => (tool.title ? [[tool.name, tool.title]] : [])));
@@ -68,11 +87,11 @@ export function createCatalog(state: AiState, options: AiOptions, { mcp, namespa
       toolsPromise = null;
     },
     async systemPrompt() {
-      const templates = mcp && state.mcpInfo?.capabilities.resources ? await mcp.listResourceTemplates().catch(() => []) : [];
-      const info = state.mcpInfo?.serverInfo;
+      const templates = await fromServers<McpResourceTemplate>((client) => client.listResourceTemplates());
+      const info = entries.length === 1 ? state.mcp[entries[0]![0]]?.info?.serverInfo : undefined;
       return systemPrompt({
         appName: options.name ?? info?.title ?? info?.name ?? "this app",
-        serverInstructions: state.mcpInfo?.instructions,
+        serverInstructions: serverInstructions(),
         appInstructions: toValue(options.instructions),
         namespaces: [
           ...templates.map((tpl) => ({ template: tpl.uriTemplate, description: tpl.description ?? tpl.title })),
@@ -87,12 +106,17 @@ export function createCatalog(state: AiState, options: AiOptions, { mcp, namespa
       const match = (r: { uri: string; label: string }) => !q || r.label.toLowerCase().includes(q) || r.uri.toLowerCase().includes(q);
       const out: PickerItem[] = contextItems.value.filter(match).map((r) => ({ ...r, group: "context" }));
       const [resources, found] = await Promise.all([
-        mcp
-          ? mcp.connect().then((info) => {
-              state.mcpInfo = info;
-              return info.capabilities.resources ? mcp.listResources() : [];
-            })
-          : [],
+        Promise.allSettled(
+          entries.map(async ([id, client]) => {
+            const info = await client.connect();
+            state.mcp[id] = { info, error: state.mcp[id]?.error ?? "" };
+            return info.capabilities.resources ? client.listResources() : [];
+          }),
+        ).then((settled) => {
+          const failed = settled.find((s) => s.status === "rejected");
+          if (failed && settled.every((s) => s.status === "rejected")) throw failed.reason;
+          return settled.flatMap((s) => (s.status === "fulfilled" ? s.value : []));
+        }),
         q && options.searchResources ? options.searchResources(q, signal) : [],
       ]);
       for (const r of resources) {

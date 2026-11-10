@@ -2,7 +2,7 @@ import { toRaw } from "vue";
 import { initialApprovalPreview, loadApprovalPreview } from "../core/approval";
 import type { ToolEntry } from "../core/entries";
 import type { HarnessTool } from "../core/tools";
-import type { McpClient } from "../mcp/client";
+import type { McpServers } from "../mcp/servers";
 import type { AiOptions, AiState, Decision, PendingApproval } from "./types";
 
 interface Waiting {
@@ -21,7 +21,7 @@ export interface Approvals {
   cancel(): void;
 }
 
-export function createApprovals(state: AiState, options: AiOptions, mcp: McpClient | null): Approvals {
+export function createApprovals(state: AiState, options: AiOptions, servers: McpServers | null): Approvals {
   const queue: Waiting[] = [];
   let cancelPreview: (() => void) | null = null;
 
@@ -42,7 +42,7 @@ export function createApprovals(state: AiState, options: AiOptions, mcp: McpClie
     }
     state.approval = head.pending;
     const shown = state.approval;
-    cancelPreview = loadApprovalPreview(shown, options.approvalPreview, head.tool, shown.args, mcp, head.signal, () => state.approval === shown && state.conversationId === head.conversationId);
+    cancelPreview = loadApprovalPreview(shown, options.approvalPreview, head.tool, shown.args, servers, head.signal, () => state.approval === shown && state.conversationId === head.conversationId);
   }
 
   function recheck() {

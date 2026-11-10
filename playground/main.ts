@@ -8,7 +8,7 @@ import "./playground.css";
 
 const ai = createAi({
   backend: playgroundBackend(),
-  mcp: { url: "/mcp", headers: () => ({ Authorization: "Bearer otter-token" }) },
+  mcp: { burrows: { url: "/mcp", headers: () => ({ Authorization: "Bearer otter-token" }) } },
   toolHost,
   context,
   locale,

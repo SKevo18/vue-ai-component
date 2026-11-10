@@ -2,6 +2,7 @@
 import { ArrowLeft, History, Settings, SquarePen, X } from "@lucide/vue";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { Ai } from "../ai";
+import { serverErrors } from "../mcp/servers";
 import { useAiInstance, useMediaQuery, useScrollLock, useVisualViewport } from "../ui/composables";
 import { vTooltip } from "../ui/tooltip";
 import AiChatLog from "./AiChatLog.vue";
@@ -36,6 +37,7 @@ useScrollLock(sheet);
 
 const style = computed(() => (sheet.value && viewport.height ? { top: `${viewport.top}px`, height: `${viewport.height}px`, "--ai-vh": `${viewport.height}px` } : undefined));
 const heading = computed(() => (historyOpen.value ? t("history") : props.title || state.title || t("title")));
+const mcpError = computed(() => serverErrors(state.mcp));
 
 function reportWidth() {
   const px = open.value && docked.value && root.value ? Math.round(root.value.getBoundingClientRect().width) : 0;
@@ -131,7 +133,7 @@ function close() {
         <button v-tooltip="t('close')" type="button" class="ai-icon-btn" @click="close"><X /></button>
       </div>
     </header>
-    <div v-if="state.approval === null && state.mcpError && !state.running && state.error?.kind !== 'tools'" class="ai-notice">{{ t("errors.tools", { message: state.mcpError }) }}</div>
+    <div v-if="state.approval === null && mcpError && !state.running && state.error?.kind !== 'tools'" class="ai-notice">{{ t("errors.tools", { message: mcpError }) }}</div>
     <div v-if="state.storageError" class="ai-notice" role="alert">{{ t("errors.storage", { message: state.storageError }) }}</div>
     <AiHistory v-if="historyOpen" :ai="ai" @open="historyOpen = false" />
     <template v-else>

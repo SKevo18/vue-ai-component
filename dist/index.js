@@ -1122,9 +1122,8 @@ function createNamespaceRegistry(options) {
 		while (images.size > IMAGE_CACHE_SIZE) images.delete(images.keys().next().value);
 	}
 	async function readMcp(uri, signal) {
-		const client = options.mcp();
-		if (!client) throw new Error(`No namespace serves ${uri}.`);
-		const contents = await client.readResource(uri, { signal });
+		if (!options.mcp) throw new Error(`No namespace serves ${uri}.`);
+		const contents = await options.mcp.readResource(uri, { signal });
 		if (!contents.length) throw new Error(`${uri} is empty.`);
 		const texts = [];
 		let image;
@@ -1248,7 +1247,7 @@ function initialApprovalPreview(tool, args) {
 	};
 }
 /** cancelling also cancels preview reads; late results never update a later approval */
-function loadApprovalPreview(state, hook, tool, args, client, parent, isCurrent) {
+function loadApprovalPreview(state, hook, tool, args, servers, parent, isCurrent) {
 	if (!hook) return () => {};
 	const controller = new AbortController();
 	const signal = controller.signal;
@@ -1265,15 +1264,17 @@ function loadApprovalPreview(state, hook, tool, args, client, parent, isCurrent)
 		signal.throwIfAborted();
 		return hook({
 			tool: {
-				name: tool.name,
+				name: tool.mcp?.tool ?? tool.name,
 				title: tool.title,
 				parameters: tool.parameters
 			},
+			server: tool.mcp?.server,
 			args,
 			signal,
 			async readTool(name, input) {
 				signal.throwIfAborted();
-				if (!client) throw new Error("Approval preview needs an MCP client.");
+				const client = tool.mcp && servers?.clients[tool.mcp.server];
+				if (!client) throw new Error("Approval preview needs the tool's MCP server.");
 				const tools = await client.listTools({ signal });
 				signal.throwIfAborted();
 				if (!tools.some((entry) => entry.name === name && entry.annotations?.readOnlyHint === true)) throw new Error(`Approval preview cannot call non-read-only tool ${name}.`);
@@ -1284,8 +1285,8 @@ function loadApprovalPreview(state, hook, tool, args, client, parent, isCurrent)
 			},
 			async readResource(uri) {
 				signal.throwIfAborted();
-				if (!client) throw new Error("Approval preview needs an MCP client.");
-				const result = await client.readResource(uri, { signal });
+				if (!servers) throw new Error("Approval preview needs an MCP client.");
+				const result = await servers.readResource(uri, { signal });
 				signal.throwIfAborted();
 				return result;
 			}
@@ -1307,7 +1308,7 @@ function loadApprovalPreview(state, hook, tool, args, client, parent, isCurrent)
 	return cancel;
 }
 // src/harness/approvals.ts
-function createApprovals(state, options, mcp) {
+function createApprovals(state, options, servers) {
 	const queue = [];
 	let cancelPreview = null;
 	function needsApproval(tool) {
@@ -1326,7 +1327,7 @@ function createApprovals(state, options, mcp) {
 		}
 		state.approval = head.pending;
 		const shown = state.approval;
-		cancelPreview = loadApprovalPreview(shown, options.approvalPreview, head.tool, shown.args, mcp, head.signal, () => state.approval === shown && state.conversationId === head.conversationId);
+		cancelPreview = loadApprovalPreview(shown, options.approvalPreview, head.tool, shown.args, servers, head.signal, () => state.approval === shown && state.conversationId === head.conversationId);
 	}
 	function recheck() {
 		for (const waiting of [...queue]) {
@@ -1671,10 +1672,14 @@ async function toolResult(result, ctx) {
 		links: links.length ? links : void 0
 	};
 }
-function mcpHarnessTool(tool, client) {
+function mcpHarnessTool(tool, client, server, name = tool.name) {
 	const approval = toolApproval(tool);
 	return {
-		name: tool.name,
+		name,
+		mcp: {
+			server,
+			tool: tool.name
+		},
 		title: tool.title ?? tool.annotations?.title,
 		description: tool.description ?? tool.title ?? tool.name,
 		parameters: {
@@ -1695,32 +1700,54 @@ function mcpHarnessTool(tool, client) {
 }
 // src/harness/catalog.ts
 var SKILL = /^skill:\/\//i;
-function createCatalog(state, options, { mcp, namespaces, locale, contextItems }) {
+function createCatalog(state, options, { servers, namespaces, locale, contextItems }) {
 	let toolsPromise = null;
-	async function mcpTools(refresh) {
-		if (!mcp) return [];
+	const entries = Object.entries(servers.clients);
+	async function serverTools(id, client, refresh) {
 		try {
-			state.mcpInfo = await mcp.connect();
-			const list = await mcp.listTools({ refresh });
-			state.mcpError = "";
-			return list.map((tool) => mcpHarnessTool(tool, mcp));
+			const info = await client.connect();
+			const list = await client.listTools({ refresh });
+			state.mcp[id] = {
+				info,
+				error: ""
+			};
+			return list;
 		} catch (e) {
-			state.mcpError = errorText(e);
+			state.mcp[id] = {
+				info: state.mcp[id]?.info ?? null,
+				error: errorText(e)
+			};
 			return [];
 		}
 	}
+	async function mcpTools(refresh) {
+		const lists = await Promise.all(entries.map(async ([id, client]) => ({
+			id,
+			client,
+			tools: await serverTools(id, client, refresh)
+		})));
+		const offered = /* @__PURE__ */ new Map();
+		for (const { tools } of lists) for (const tool of tools) offered.set(tool.name, (offered.get(tool.name) ?? 0) + 1);
+		return lists.flatMap(({ id, client, tools }) => tools.map((tool) => mcpHarnessTool(tool, client, id, offered.get(tool.name) > 1 ? `${id}__${tool.name}`.slice(0, 64) : tool.name)));
+	}
+	async function fromServers(list) {
+		return (await Promise.all(entries.map(([id, client]) => state.mcp[id]?.info?.capabilities.resources ? list(client).catch(() => []) : []))).flat();
+	}
 	async function skills() {
-		const local = options.skills ?? [];
-		if (!mcp || !state.mcpInfo?.capabilities.resources) return local;
-		return [...(await mcp.listResources().catch(() => [])).filter((r) => /^skill:\/\/.+\/SKILL\.md$/i.test(r.uri)).map((r) => ({
+		return [...(await fromServers((client) => client.listResources())).filter((r) => /^skill:\/\/.+\/SKILL\.md$/i.test(r.uri)).map((r) => ({
 			name: r.name || r.uri.replace(/^skill:\/\/|\/SKILL\.md$/gi, ""),
 			description: r.description,
 			uri: r.uri
-		})), ...local];
+		})), ...options.skills ?? []];
+	}
+	function serverInstructions() {
+		const connected = entries.flatMap(([id]) => state.mcp[id]?.info ? [[id, state.mcp[id].info]] : []);
+		if (entries.length === 1) return connected[0]?.[1].instructions;
+		return connected.flatMap(([id, info]) => info.instructions?.trim() ? [`## ${id}\n${info.instructions.trim()}`] : []).join("\n\n") || void 0;
 	}
 	return {
 		tools(refresh = false) {
-			if (!toolsPromise || refresh || state.mcpError) {
+			if (!toolsPromise || refresh || Object.values(state.mcp).some((s) => s.error)) {
 				const builtins = [readTool(namespaces), planTool];
 				toolsPromise = mcpTools(refresh).then((list) => {
 					state.toolTitles = Object.fromEntries(list.flatMap((tool) => tool.title ? [[tool.name, tool.title]] : []));
@@ -1733,11 +1760,11 @@ function createCatalog(state, options, { mcp, namespaces, locale, contextItems }
 			toolsPromise = null;
 		},
 		async systemPrompt() {
-			const templates = mcp && state.mcpInfo?.capabilities.resources ? await mcp.listResourceTemplates().catch(() => []) : [];
-			const info = state.mcpInfo?.serverInfo;
+			const templates = await fromServers((client) => client.listResourceTemplates());
+			const info = entries.length === 1 ? state.mcp[entries[0][0]]?.info?.serverInfo : void 0;
 			return systemPrompt({
 				appName: options.name ?? info?.title ?? info?.name ?? "this app",
-				serverInstructions: state.mcpInfo?.instructions,
+				serverInstructions: serverInstructions(),
 				appInstructions: toValue(options.instructions),
 				namespaces: [...templates.map((tpl) => ({
 					template: tpl.uriTemplate,
@@ -1757,10 +1784,18 @@ function createCatalog(state, options, { mcp, namespaces, locale, contextItems }
 				...r,
 				group: "context"
 			}));
-			const [resources, found] = await Promise.all([mcp ? mcp.connect().then((info) => {
-				state.mcpInfo = info;
-				return info.capabilities.resources ? mcp.listResources() : [];
-			}) : [], q && options.searchResources ? options.searchResources(q, signal) : []]);
+			const [resources, found] = await Promise.all([Promise.allSettled(entries.map(async ([id, client]) => {
+				const info = await client.connect();
+				state.mcp[id] = {
+					info,
+					error: state.mcp[id]?.error ?? ""
+				};
+				return info.capabilities.resources ? client.listResources() : [];
+			})).then((settled) => {
+				const failed = settled.find((s) => s.status === "rejected");
+				if (failed && settled.every((s) => s.status === "rejected")) throw failed.reason;
+				return settled.flatMap((s) => s.status === "fulfilled" ? s.value : []);
+			}), q && options.searchResources ? options.searchResources(q, signal) : []]);
 			for (const r of resources) {
 				const skill = SKILL.test(r.uri);
 				const item = {
@@ -1864,7 +1899,7 @@ async function conversationExport({ state, stored, current, catalog, connection,
 	const exportedAt = (/* @__PURE__ */ new Date()).toISOString();
 	const data = {
 		format: "vue-ai-component-conversation",
-		version: 1,
+		version: 2,
 		exported_at: exportedAt,
 		site: typeof location === "undefined" ? void 0 : location.origin,
 		conversation: {
@@ -1878,11 +1913,11 @@ async function conversationExport({ state, stored, current, catalog, connection,
 			allowed_tools: stored.allowedTools ?? [],
 			auto_approve: stored.autoApprove ?? false
 		},
-		mcp: state.mcpInfo ? {
-			server: state.mcpInfo.serverInfo,
-			protocol: state.mcpInfo.protocolVersion,
-			error: state.mcpError || void 0
-		} : { error: state.mcpError || void 0 },
+		mcp: Object.fromEntries(Object.entries(state.mcp).map(([id, s]) => [id, {
+			server: s.info?.serverInfo,
+			protocol: s.info?.protocolVersion,
+			error: s.error || void 0
+		}])),
 		system,
 		...systemError ? { system_error: systemError } : {},
 		tools: specs,
@@ -2731,6 +2766,62 @@ function createMcpClient(options) {
 		}
 	};
 }
+// src/mcp/servers.ts
+var SERVER_ID = /^[A-Za-z0-9_-]{1,32}$/;
+function sameOrigin(url) {
+	if (typeof location === "undefined") return true;
+	try {
+		return new URL(url, location.href).origin === location.origin;
+	} catch {
+		return false;
+	}
+}
+function createMcpServers(config, tabHeaders) {
+	const clients = {};
+	for (const [id, entry] of Object.entries(config ?? {})) {
+		if (!SERVER_ID.test(id)) throw new Error(`MCP server id "${id}" must be 1-32 letters, digits, "_" or "-".`);
+		clients[id] = "callTool" in entry ? entry : createMcpClient({
+			...entry,
+			headers: async () => ({
+				...tabHeaders && sameOrigin(entry.url) ? tabHeaders() : {},
+				...await entry.headers?.() ?? {}
+			})
+		});
+	}
+	const list = Object.values(clients);
+	async function serves(client, scheme, signal) {
+		try {
+			if (!(await client.connect({ signal })).capabilities.resources) return false;
+			const [templates, resources] = await Promise.all([client.listResourceTemplates({ signal }), client.listResources({ signal })]);
+			return [...templates.map((t) => t.uriTemplate), ...resources.map((r) => r.uri)].some((uri) => schemeOf(uri) === scheme);
+		} catch {
+			return false;
+		}
+	}
+	return {
+		clients,
+		async readResource(uri, options) {
+			if (!list.length) throw new Error(`No namespace serves ${uri}.`);
+			if (list.length === 1) return list[0].readResource(uri, options);
+			const scheme = schemeOf(uri) ?? "";
+			const advertised = await Promise.all(list.map((client) => serves(client, scheme, options?.signal)));
+			const ordered = [...list.filter((_, i) => advertised[i]), ...list.filter((_, i) => !advertised[i])];
+			let failure;
+			for (const client of ordered) try {
+				return await client.readResource(uri, options);
+			} catch (e) {
+				if (options?.signal?.aborted) throw e;
+				failure ??= e;
+			}
+			throw failure;
+		}
+	};
+}
+function serverErrors(servers) {
+	const failed = Object.entries(servers).filter(([, s]) => s.error);
+	if (Object.keys(servers).length === 1) return failed[0]?.[1].error ?? "";
+	return failed.map(([id, s]) => `${id}: ${s.error}`).join("; ");
+}
 // src/providers/generate.ts
 var THINKING_MODELS$1 = /gemini-(2\.5|[3-9])/;
 function toGeminiContents(messages) {
@@ -3386,13 +3477,8 @@ function createAi(options) {
 	const { t, locale } = createTranslator(() => toValue(options.locale), options.messages);
 	configurePdf(options.pdf ?? null);
 	const toolHost = options.toolHost ?? null;
-	const mcp = !options.mcp ? null : "callTool" in options.mcp ? options.mcp : createMcpClient({
-		...options.mcp,
-		headers: async () => ({
-			...toolHost?.headers() ?? {},
-			...await options.mcp.headers?.() ?? {}
-		})
-	});
+	const servers = createMcpServers(options.mcp, toolHost ? () => toolHost.headers() : void 0);
+	const hasServers = Object.keys(servers.clients).length > 0;
 	const state = reactive({
 		connections: [],
 		connectionsLoaded: false,
@@ -3416,8 +3502,10 @@ function createAi(options) {
 		approval: null,
 		history: [],
 		draft: "",
-		mcpInfo: null,
-		mcpError: "",
+		mcp: Object.fromEntries(Object.keys(servers.clients).map((id) => [id, {
+			info: null,
+			error: ""
+		}])),
 		storageError: "",
 		adding: [],
 		attachError: "",
@@ -3440,7 +3528,7 @@ function createAi(options) {
 	});
 	const { connection, model } = connections;
 	const namespaces = createNamespaceRegistry({
-		mcp: () => mcp,
+		mcp: hasServers ? servers : null,
 		prepareImage: (image) => normaliseImage(fromBase64(image.data, image.mimeType), image.mimeType)
 	});
 	const attachments = createChatAttachments(state, attachmentStore, {
@@ -3452,12 +3540,12 @@ function createAi(options) {
 	namespaces.register(attachments.namespace);
 	for (const ns of options.namespaces ?? []) namespaces.register(ns);
 	const catalog = createCatalog(state, options, {
-		mcp,
+		servers,
 		namespaces,
 		locale,
 		contextItems
 	});
-	const approvals = createApprovals(state, options, mcp);
+	const approvals = createApprovals(state, options, hasServers ? servers : null);
 	let initPromise = null;
 	let controller = null;
 	let runDone = Promise.resolve();
@@ -3507,7 +3595,7 @@ function createAi(options) {
 				loadHistory(),
 				last ? conversations.load(last).then((c) => !state.entries.length && apply(c), () => void 0) : void 0
 			]);
-			if (mcp) catalog.tools();
+			if (hasServers) catalog.tools();
 		})();
 		return initPromise;
 	}
@@ -3536,9 +3624,10 @@ function createAi(options) {
 		const conversationId = state.conversationId;
 		const work = async () => {
 			const list = await catalog.tools();
-			if (state.mcpError) state.error = {
+			const mcpError = serverErrors(state.mcp);
+			if (mcpError) state.error = {
 				kind: "tools",
-				message: t("errors.tools", { message: state.mcpError })
+				message: t("errors.tools", { message: mcpError })
 			};
 			await runAgent({
 				chat: connectionChat(target.connection, options.backend.transport(target.connection.id)),
@@ -3681,7 +3770,7 @@ function createAi(options) {
 		t,
 		locale,
 		options,
-		mcp,
+		mcp: servers.clients,
 		namespaces,
 		toolHost,
 		get connection() {
@@ -4397,6 +4486,7 @@ function useElapsed(running, since) {
 var states = /* @__PURE__ */ new WeakMap();
 var tip = null;
 var owner = null;
+var pending = null;
 var stopUpdate = null;
 var timer;
 var lastPointer = "mouse";
@@ -4412,6 +4502,7 @@ function element() {
 }
 function hide() {
 	clearTimeout(timer);
+	pending = null;
 	stopUpdate?.();
 	stopUpdate = null;
 	owner = null;
@@ -4422,7 +4513,10 @@ function show(el, value) {
 	if (!text || lastPointer === "touch") return;
 	const keys = typeof value === "object" && value ? value.keys : void 0;
 	clearTimeout(timer);
+	pending = el;
 	timer = setTimeout(() => {
+		pending = null;
+		if (!el.isConnected) return;
 		const t = element();
 		t.textContent = text;
 		if (keys) {
@@ -4434,6 +4528,7 @@ function show(el, value) {
 		owner = el;
 		stopUpdate?.();
 		stopUpdate = autoUpdate(el, t, () => {
+			if (!el.isConnected) return hide();
 			computePosition(el, t, {
 				placement: "bottom",
 				strategy: "fixed",
@@ -4490,7 +4585,7 @@ var vTooltip = {
 		el.removeEventListener("focusin", state.show);
 		el.removeEventListener("focusout", hide);
 		el.removeEventListener("click", hide);
-		if (owner === el) hide();
+		if (owner === el || pending === el) hide();
 		states.delete(el);
 	}
 };
@@ -6749,6 +6844,7 @@ var AiSidebar_default = /* @__PURE__ */ defineComponent({
 			"--ai-vh": `${viewport.height}px`
 		} : void 0);
 		const heading = computed(() => historyOpen.value ? t("history") : props.title || state.title || t("title"));
+		const mcpError = computed(() => serverErrors(state.mcp));
 		function reportWidth() {
 			const px = open.value && docked.value && root.value ? Math.round(root.value.getBoundingClientRect().width) : 0;
 			document.documentElement.style.setProperty("--ai-sidebar-space", `${px}px`);
@@ -6859,7 +6955,7 @@ var AiSidebar_default = /* @__PURE__ */ defineComponent({
 						}, [createVNode(unref(X))])), [[unref(vTooltip), unref(t)("close")]])
 					])
 				]),
-				unref(state).approval === null && unref(state).mcpError && !unref(state).running && unref(state).error?.kind !== "tools" ? (openBlock(), createElementBlock("div", _hoisted_7$3, toDisplayString(unref(t)("errors.tools", { message: unref(state).mcpError })), 1)) : createCommentVNode("", true),
+				unref(state).approval === null && mcpError.value && !unref(state).running && unref(state).error?.kind !== "tools" ? (openBlock(), createElementBlock("div", _hoisted_7$3, toDisplayString(unref(t)("errors.tools", { message: mcpError.value })), 1)) : createCommentVNode("", true),
 				unref(state).storageError ? (openBlock(), createElementBlock("div", _hoisted_8$3, toDisplayString(unref(t)("errors.storage", { message: unref(state).storageError })), 1)) : createCommentVNode("", true),
 				historyOpen.value ? (openBlock(), createBlock(AiHistory_default, {
 					key: 2,

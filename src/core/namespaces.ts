@@ -1,4 +1,4 @@
-import type { McpClient } from "../mcp/client";
+import type { McpResourceContents } from "../mcp/types";
 import type { ImageRef } from "./entries";
 import type { ImageContent } from "./types";
 
@@ -74,7 +74,7 @@ const CACHE_SIZE = 8;
 const IMAGE_CACHE_SIZE = 16;
 
 export interface NamespaceRegistryOptions {
-  mcp(): McpClient | null;
+  mcp: { readResource(uri: string, options?: { signal?: AbortSignal }): Promise<McpResourceContents[]> } | null;
   prepareImage(image: ImageContent): Promise<ImageContent>;
 }
 
@@ -91,9 +91,8 @@ export function createNamespaceRegistry(options: NamespaceRegistryOptions): Name
   }
 
   async function readMcp(uri: string, signal?: AbortSignal): Promise<NamespaceContent> {
-    const client = options.mcp();
-    if (!client) throw new Error(`No namespace serves ${uri}.`);
-    const contents = await client.readResource(uri, { signal });
+    if (!options.mcp) throw new Error(`No namespace serves ${uri}.`);
+    const contents = await options.mcp.readResource(uri, { signal });
     if (!contents.length) throw new Error(`${uri} is empty.`);
     const texts: string[] = [];
     let image: ImageRef | undefined;

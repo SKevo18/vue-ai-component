@@ -63,10 +63,11 @@ export async function toolResult(result: McpToolResult, ctx: Pick<ToolContext, "
   };
 }
 
-export function mcpHarnessTool(tool: McpTool, client: McpClient): HarnessTool {
+export function mcpHarnessTool(tool: McpTool, client: McpClient, server: string, name = tool.name): HarnessTool {
   const approval = toolApproval(tool);
   return {
-    name: tool.name,
+    name,
+    mcp: { server, tool: tool.name },
     title: tool.title ?? tool.annotations?.title,
     description: tool.description ?? tool.title ?? tool.name,
     parameters: { ...tool.inputSchema, type: "object" },

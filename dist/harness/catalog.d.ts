@@ -3,7 +3,7 @@ import type { ResourceRef } from "../core/entries";
 import type { NamespaceRegistry } from "../core/namespaces";
 import type { HarnessTool } from "../core/tools";
 import type { Locale } from "../i18n";
-import type { McpClient } from "../mcp/client";
+import type { McpServers } from "../mcp/servers";
 import type { AiOptions, AiState, PickerItem } from "./types";
 export interface Catalog {
     tools(refresh?: boolean): Promise<HarnessTool[]>;
@@ -12,10 +12,10 @@ export interface Catalog {
     pickerItems(query: string, signal: AbortSignal): Promise<PickerItem[]>;
 }
 interface Dependencies {
-    mcp: McpClient | null;
+    servers: McpServers;
     namespaces: NamespaceRegistry;
     locale(): Locale;
     contextItems: ComputedRef<ResourceRef[]>;
 }
-export declare function createCatalog(state: AiState, options: AiOptions, { mcp, namespaces, locale, contextItems }: Dependencies): Catalog;
+export declare function createCatalog(state: AiState, options: AiOptions, { servers, namespaces, locale, contextItems }: Dependencies): Catalog;
 export {};

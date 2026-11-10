@@ -13,6 +13,7 @@ interface State {
 const states = new WeakMap<HTMLElement, State>();
 let tip: HTMLDivElement | null = null;
 let owner: HTMLElement | null = null;
+let pending: HTMLElement | null = null;
 let stopUpdate: (() => void) | null = null;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let lastPointer = "mouse";
@@ -30,6 +31,7 @@ function element(): HTMLDivElement {
 
 function hide() {
   clearTimeout(timer);
+  pending = null;
   stopUpdate?.();
   stopUpdate = null;
   owner = null;
@@ -41,7 +43,10 @@ function show(el: HTMLElement, value: TooltipValue) {
   if (!text || lastPointer === "touch") return;
   const keys = typeof value === "object" && value ? value.keys : undefined;
   clearTimeout(timer);
+  pending = el;
   timer = setTimeout(() => {
+    pending = null;
+    if (!el.isConnected) return;
     const t = element();
     t.textContent = text;
     if (keys) {
@@ -53,6 +58,8 @@ function show(el: HTMLElement, value: TooltipValue) {
     owner = el;
     stopUpdate?.();
     stopUpdate = autoUpdate(el, t, () => {
+      // an element removed without unmounting must not leave its tooltip behind
+      if (!el.isConnected) return hide();
       void computePosition(el, t, { placement: "bottom", strategy: "fixed", middleware: [offset(6), flip(), shift({ padding: 6 })] }).then(({ x, y }) => {
         Object.assign(t.style, { left: `${x}px`, top: `${y}px` });
       });
@@ -99,7 +106,7 @@ export const vTooltip: Directive<HTMLElement, TooltipValue> = {
     el.removeEventListener("focusin", state.show);
     el.removeEventListener("focusout", hide);
     el.removeEventListener("click", hide);
-    if (owner === el) hide();
+    if (owner === el || pending === el) hide();
     states.delete(el);
   },
 };

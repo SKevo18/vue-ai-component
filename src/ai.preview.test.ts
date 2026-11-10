@@ -49,7 +49,7 @@ describe("resource preview API", () => {
     const ai = componentAi({ searchResources: async () => { throw new Error("Search unavailable"); } });
     await expect(ai.pickerItems("den", new AbortController().signal)).rejects.toThrow("Search unavailable");
     const mcp = { callTool: vi.fn(), connect: async () => ({ capabilities: { resources: {} } }), listResources: async () => { throw new Error("Resources unavailable"); } } as unknown as McpClient;
-    await expect(componentAi({ mcp }).pickerItems("", new AbortController().signal)).rejects.toThrow("Resources unavailable");
+    await expect(componentAi({ mcp: { den: mcp } }).pickerItems("", new AbortController().signal)).rejects.toThrow("Resources unavailable");
   });
 
   it("preserves optional size metadata on custom picker results", async () => {

@@ -11,8 +11,8 @@ import type { PromptSkill } from "../core/prompt";
 import type { HarnessTool } from "../core/tools";
 import type { AiErrorKind } from "../core/types";
 import type { Locale, MessageOverrides, Translate } from "../i18n";
-import type { McpClient, McpClientOptions } from "../mcp/client";
-import type { McpServerInfo } from "../mcp/types";
+import type { McpClient } from "../mcp/client";
+import type { McpServerConfig, McpServerState } from "../mcp/servers";
 import type { ConversationMeta, ConversationStore } from "../stores/conversations";
 import type { AiPreferences, PreferencesStore } from "../stores/preferences";
 
@@ -26,7 +26,8 @@ export interface Suggestion {
 
 export interface AiOptions {
   backend: AiBackend;
-  mcp?: McpClient | McpClientOptions | null;
+  /** keyed by server id; tools two servers share are offered as `<id>__<tool>` */
+  mcp?: Readonly<Record<string, McpServerConfig>>;
   toolHost?: BrowserToolHost;
   name?: string;
   /** keep it stable between runs so prompt caching works */
@@ -118,8 +119,7 @@ export interface AiState {
   approval: PendingApproval | null;
   history: ConversationMeta[];
   draft: string;
-  mcpInfo: McpServerInfo | null;
-  mcpError: string;
+  mcp: Record<string, McpServerState>;
   storageError: string;
   adding: string[];
   attachError: string;
@@ -133,7 +133,7 @@ export interface Ai {
   readonly t: Translate;
   readonly locale: () => Locale;
   readonly options: AiOptions;
-  readonly mcp: McpClient | null;
+  readonly mcp: Readonly<Record<string, McpClient>>;
   readonly namespaces: NamespaceRegistry;
   readonly toolHost: BrowserToolHost | null;
   readonly connection: AiConnection | null;
