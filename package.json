@@ -25,6 +25,10 @@
       "types": "./dist/vite.d.ts",
       "import": "./dist/vite.js"
     },
+    "./code-assets": {
+      "types": "./dist/code-assets.d.ts",
+      "import": "./dist/code-assets.js"
+    },
     "./style.css": "./dist/style.css"
   },
   "files": [

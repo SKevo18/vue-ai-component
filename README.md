@@ -30,16 +30,17 @@ bun add pyodide   # optional peer, only for Python
 ```
 
 ```ts
-// vite.config.ts: serves the workers, Pyodide and its numpy, pandas and matplotlib wheels from /assets/
+// vite.config.ts: serves the workers, Pyodide and its numpy, pandas and matplotlib wheels under /assets/
 import { codeAssets } from "@skevo18/vue-ai-component/vite";
 export default defineConfig({ plugins: [codeAssets(), vue()] });
 
 // the assistant
 import { createCodeTool } from "@skevo18/vue-ai-component/code";
-createAi({ backend, tools: [createCodeTool({ assetsUrl: "/assets/code/", pyodideUrl: "/assets/pyodide/" })] });
+import { assetsUrl, pyodideUrl } from "@skevo18/vue-ai-component/code-assets";
+createAi({ backend, tools: [createCodeTool({ assetsUrl, pyodideUrl })] });
 ```
 
-The app server serves `/assets/code/` with `CODE_WORKER_CSP` from `./vite` (`script-src 'self' blob: 'unsafe-eval' 'wasm-unsafe-eval'`), and the page's policy needs `worker-src 'self'`. The workers reach nothing but the Pyodide folder. Apps with their own kernels (other runtimes, package policies, time limits) build workers from `@skevo18/vue-ai-component/code/worker` and pass `kernel` to `createCodeTool`; `mounts` copies the app's own files into the workspace.
+The folders (`/assets/code-<hash>/`, `/assets/pyodide-<version>-<hash>/`) carry a content hash, so the app server may cache them forever. It serves `/assets/code-*/` with `CODE_WORKER_CSP` from `./vite` (`script-src 'self' blob: 'unsafe-eval' 'wasm-unsafe-eval'`: the JavaScript worker runs each program as a blob script), and the page's policy needs `worker-src 'self'`. The workers reach nothing but the Pyodide folder. Apps with their own kernels (other runtimes, package policies, time limits) build workers from `@skevo18/vue-ai-component/code/worker` and pass `kernel` to `createCodeTool`; `mounts` copies the app's own files into the workspace.
 
 ## Subscription sign-ins
 

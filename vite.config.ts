@@ -9,7 +9,7 @@ export default defineConfig({
   build: {
     lib: {
       // ./code and ./vite share nothing with the main entry, so hosts that do not import them bundle nothing extra
-      entry: { index: "src/index.ts", code: "src/code/index.ts", "code-worker": "src/code/worker/index.ts", vite: "src/vite.ts" },
+      entry: { index: "src/index.ts", code: "src/code/index.ts", "code-worker": "src/code/worker/index.ts", "code-assets": "src/code-assets.ts", vite: "src/vite.ts" },
       formats: ["es"],
       fileName: (_, entry) => `${entry}.js`,
       cssFileName: "style",
