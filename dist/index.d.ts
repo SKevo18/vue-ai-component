@@ -8,7 +8,7 @@ export { createServerBackend } from "./backend/server";
 export type { ServerBackendOptions, ServerProvider, ServerProviderId, ServerProviderStatus } from "./backend/server";
 export { createMcpClient } from "./mcp/client";
 export type { McpCallOptions, McpClient, McpClientOptions, McpListOptions, McpProgress, McpRequestOptions } from "./mcp/client";
-export type { McpServerConfig, McpServerState } from "./mcp/servers";
+export type { McpServerConfig, McpServerFailure, McpServerState } from "./mcp/servers";
 export { MCP_PROTOCOL_VERSION, McpError } from "./mcp/types";
 export type { McpContent, McpErrorKind, McpResource, McpResourceContents, McpResourceTemplate, McpServerInfo, McpTool, McpToolAnnotations, McpToolResult } from "./mcp/types";
 export { createBrowserToolHost } from "./browser/tool-host";

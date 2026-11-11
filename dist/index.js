@@ -1711,12 +1711,14 @@ function createCatalog(state, options, { servers, namespaces, locale, contextIte
 			const listing = (async () => [await client.connect(), await client.listTools({ refresh })])();
 			const [info, list] = await Promise.race([listing, late.promise]);
 			state.mcp[id] = {
+				name: servers.names[id] ?? id,
 				info,
 				error: ""
 			};
 			return list;
 		} catch (e) {
 			state.mcp[id] = {
+				name: servers.names[id] ?? id,
 				info: state.mcp[id]?.info ?? null,
 				error: errorText(e)
 			};
@@ -1795,6 +1797,7 @@ function createCatalog(state, options, { servers, namespaces, locale, contextIte
 			const [resources, found] = await Promise.all([Promise.allSettled(entries.map(async ([id, client]) => {
 				const info = await client.connect();
 				state.mcp[id] = {
+					name: servers.names[id] ?? id,
 					info,
 					error: state.mcp[id]?.error ?? ""
 				};
@@ -2190,7 +2193,7 @@ var en = {
 		noConnections: "No AI provider is available."
 	},
 	errors: {
-		tools: "The app's tools are unavailable: {message}",
+		tools: "Tools from {name} are unavailable.",
 		storage: "Chats could not be stored: {message}",
 		rejectedKey: "The key was rejected: {message}",
 		auth: "Access denied",
@@ -2371,7 +2374,7 @@ var sk = {
 		noConnections: "Nie je dostupný žiadny poskytovateľ AI."
 	},
 	errors: {
-		tools: "Nástroje aplikácie nie sú dostupné: {message}",
+		tools: "Nástroje zo služby {name} nie sú dostupné.",
 		storage: "Chaty sa nepodarilo uložiť: {message}",
 		rejectedKey: "Kľúč bol odmietnutý: {message}",
 		auth: "Prístup zamietnutý",
@@ -2788,8 +2791,10 @@ function sameOrigin(url) {
 }
 function createMcpServers(config, tabHeaders) {
 	const clients = {};
+	const names = {};
 	for (const [id, entry] of Object.entries(config ?? {})) {
 		if (!SERVER_ID.test(id)) throw new Error(`MCP server id "${id}" must be 1-32 letters, digits, "_" or "-".`);
+		names[id] = entry.name?.trim() || id;
 		clients[id] = "callTool" in entry ? entry : createMcpClient({
 			...entry,
 			headers: async () => ({
@@ -2810,6 +2815,7 @@ function createMcpServers(config, tabHeaders) {
 	}
 	return {
 		clients,
+		names,
 		async readResource(uri, options) {
 			if (!list.length) throw new Error(`No namespace serves ${uri}.`);
 			if (list.length === 1) return list[0].readResource(uri, options);
@@ -2827,10 +2833,16 @@ function createMcpServers(config, tabHeaders) {
 		}
 	};
 }
-function serverErrors(servers) {
-	const failed = Object.entries(servers).filter(([, s]) => s.error);
-	if (Object.keys(servers).length === 1) return failed[0]?.[1].error ?? "";
-	return failed.map(([id, s]) => `${id}: ${s.error}`).join("; ");
+function failedServers(servers) {
+	return Object.entries(servers).flatMap(([id, s]) => s.error ? [{
+		id,
+		name: s.name,
+		error: s.error
+	}] : []);
+}
+/** identifies a set of failures, so a closed notice stays closed until they change */
+function failuresKey(failures) {
+	return JSON.stringify(failures.map((f) => [f.id, f.error]));
 }
 // src/providers/generate.ts
 var THINKING_MODELS$1 = /gemini-(2\.5|[3-9])/;
@@ -3512,7 +3524,8 @@ function createAi(options) {
 		approval: null,
 		history: [],
 		draft: "",
-		mcp: Object.fromEntries(Object.keys(servers.clients).map((id) => [id, {
+		mcp: Object.fromEntries(Object.entries(servers.names).map(([id, name]) => [id, {
+			name,
 			info: null,
 			error: ""
 		}])),
@@ -3635,10 +3648,11 @@ function createAi(options) {
 		const conversationId = state.conversationId;
 		const work = async () => {
 			const list = await catalog.tools();
-			const mcpError = serverErrors(state.mcp);
-			if (mcpError && mcpError !== state.dismissedTools) state.error = {
+			const failures = failedServers(state.mcp);
+			if (failures.length && failuresKey(failures) !== state.dismissedTools) state.error = {
 				kind: "tools",
-				message: t("errors.tools", { message: mcpError })
+				message: failures.map((f) => t("errors.tools", { name: f.name })).join(" "),
+				failures
 			};
 			await runAgent({
 				chat: connectionChat(target.connection, options.backend.transport(target.connection.id)),
@@ -3821,7 +3835,7 @@ function createAi(options) {
 				state.storageError = "";
 				return;
 			}
-			if (notice === "tools" || state.error?.kind === "tools") state.dismissedTools = serverErrors(state.mcp);
+			if (notice === "tools" || state.error?.kind === "tools") state.dismissedTools = failuresKey(failedServers(state.mcp));
 			if (!notice) state.error = null;
 		},
 		setChatAutoApprove(on) {
@@ -5509,8 +5523,15 @@ var _hoisted_19$2 = {
 	class: "ai-error",
 	role: "alert"
 };
-var _hoisted_20$2 = { class: "ai-error-text" };
+var _hoisted_20$2 = {
+	key: 0,
+	class: "ai-error-text"
+};
 var _hoisted_21$1 = {
+	key: 1,
+	class: "ai-error-text"
+};
+var _hoisted_22$1 = {
 	key: 0,
 	class: "ai-error-headline"
 };
@@ -5655,15 +5676,21 @@ var AiChatLog_default = /* @__PURE__ */ defineComponent({
 				}, null, -1)), createElementVNode("span", _hoisted_18$3, toDisplayString(activityText.value), 1)])) : createCommentVNode("", true),
 				unref(state).error ? (openBlock(), createElementBlock("div", _hoisted_19$2, [
 					createVNode(unref(AlertCircle), { class: "ai-error-icon" }),
-					createElementVNode("span", _hoisted_20$2, [errorHeadline.value ? (openBlock(), createElementBlock("strong", _hoisted_21$1, toDisplayString(errorHeadline.value), 1)) : createCommentVNode("", true), createTextVNode(" " + toDisplayString(unref(state).error.message), 1)]),
+					unref(state).error.failures?.length ? (openBlock(), createElementBlock("span", _hoisted_20$2, [(openBlock(true), createElementBlock(Fragment, null, renderList(unref(state).error.failures, (f) => {
+						return withDirectives((openBlock(), createElementBlock("span", {
+							key: f.id,
+							class: "ai-failure",
+							tabindex: "0"
+						}, [createTextVNode(toDisplayString(unref(t)("errors.tools", { name: f.name })), 1)])), [[unref(vTooltip), f.error]]);
+					}), 128))])) : (openBlock(), createElementBlock("span", _hoisted_21$1, [errorHeadline.value ? (openBlock(), createElementBlock("strong", _hoisted_22$1, toDisplayString(errorHeadline.value), 1)) : createCommentVNode("", true), createTextVNode(" " + toDisplayString(unref(state).error.message), 1)])),
 					unref(state).error.kind === "auth" && unref(ai).options.openSettings ? withDirectives((openBlock(), createElementBlock("button", {
-						key: 0,
+						key: 2,
 						type: "button",
 						class: "ai-icon-btn ai-sm",
 						onClick: _cache[2] || (_cache[2] = ($event) => unref(ai).options.openSettings())
 					}, [createVNode(unref(Settings))])), [[unref(vTooltip), unref(t)("settings")]]) : createCommentVNode("", true),
 					!unref(state).running && unref(state).error.kind !== "tools" && unref(state).entries.length ? withDirectives((openBlock(), createElementBlock("button", {
-						key: 1,
+						key: 3,
 						type: "button",
 						class: "ai-icon-btn ai-sm",
 						onClick: _cache[3] || (_cache[3] = ($event) => unref(ai).retry())
@@ -7096,7 +7123,8 @@ var AiSidebar_default = /* @__PURE__ */ defineComponent({
 			"--ai-vh": `${viewport.height}px`
 		} : void 0);
 		const heading = computed(() => historyOpen.value ? t("history") : props.title || state.title || t("title"));
-		const mcpError = computed(() => serverErrors(state.mcp));
+		const failures = computed(() => failedServers(state.mcp));
+		const toolsNotice = computed(() => failures.value.length > 0 && failuresKey(failures.value) !== state.dismissedTools);
 		function reportWidth() {
 			const px = open.value && docked.value && root.value ? Math.round(root.value.getBoundingClientRect().width) : 0;
 			document.documentElement.style.setProperty("--ai-sidebar-space", `${px}px`);
@@ -7207,7 +7235,13 @@ var AiSidebar_default = /* @__PURE__ */ defineComponent({
 						}, [createVNode(unref(X))])), [[unref(vTooltip), unref(t)("close")]])
 					])
 				]),
-				unref(state).approval === null && mcpError.value && mcpError.value !== unref(state).dismissedTools && !unref(state).running && unref(state).error?.kind !== "tools" ? (openBlock(), createElementBlock("div", _hoisted_7$3, [createElementVNode("span", _hoisted_8$3, toDisplayString(unref(t)("errors.tools", { message: mcpError.value })), 1), withDirectives((openBlock(), createElementBlock("button", {
+				unref(state).approval === null && toolsNotice.value && !unref(state).running && unref(state).error?.kind !== "tools" ? (openBlock(), createElementBlock("div", _hoisted_7$3, [createElementVNode("span", _hoisted_8$3, [(openBlock(true), createElementBlock(Fragment, null, renderList(failures.value, (f) => {
+					return withDirectives((openBlock(), createElementBlock("span", {
+						key: f.id,
+						class: "ai-failure",
+						tabindex: "0"
+					}, [createTextVNode(toDisplayString(unref(t)("errors.tools", { name: f.name })), 1)])), [[unref(vTooltip), f.error]]);
+				}), 128))]), withDirectives((openBlock(), createElementBlock("button", {
 					type: "button",
 					class: "ai-icon-btn ai-sm",
 					onClick: _cache[3] || (_cache[3] = ($event) => unref(ai).dismissError("tools"))
