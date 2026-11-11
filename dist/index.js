@@ -2049,8 +2049,9 @@ var en = {
 	fewerChips: "Less",
 	copy: "Copy",
 	copied: "Copied",
-	usage: "{input} in · {output} out",
-	usageCached: "{input} in ({cached} cached) · {output} out",
+	usageIn: "{input} in",
+	usageInCached: "{input} in ({cached} cached)",
+	usageOut: "{output} out",
 	usageHint: "Tokens used by this reply",
 	tokenTotal: "{count} tokens",
 	sendHint: "Send, Shift+Enter for a new line",
@@ -2230,8 +2231,9 @@ var sk = {
 	fewerChips: "Menej",
 	copy: "Kopírovať",
 	copied: "Skopírované",
-	usage: "{input} vstup · {output} výstup",
-	usageCached: "{input} vstup ({cached} z cache) · {output} výstup",
+	usageIn: "{input} vstup",
+	usageInCached: "{input} vstup ({cached} z cache)",
+	usageOut: "{output} výstup",
 	usageHint: "Tokeny použité pri tejto odpovedi",
 	tokenTotal: "{count} tokenov",
 	sendHint: "Odoslať, Shift+Enter vloží nový riadok",
@@ -4873,17 +4875,17 @@ function compactNumber(n, locale) {
 		maximumFractionDigits: 1
 	}).format(n);
 }
-function usageText(usage, t, locale) {
+/** input and output token counts, each its own label */
+function usageParts(usage, t, locale) {
 	const input = compactNumber(usage.input, locale);
-	const output = compactNumber(usage.output, locale);
-	return usage.cached ? t("usageCached", {
+	return [usage.cached ? t("usageInCached", {
 		input,
-		cached: compactNumber(usage.cached, locale),
-		output
-	}) : t("usage", {
-		input,
-		output
-	});
+		cached: compactNumber(usage.cached, locale)
+	}) : t("usageIn", { input }), t("usageOut", { output: compactNumber(usage.output, locale) })];
+}
+/** one line for plain-text places such as tooltips, "1.2K in and 48 out" */
+function usageText(usage, t, locale) {
+	return new Intl.ListFormat(locale, { type: "conjunction" }).format(usageParts(usage, t, locale));
 }
 function toolList(names, t, locale, titles = {}) {
 	return new Intl.ListFormat(locale, { type: "conjunction" }).format(names.map((n) => toolLabel(n, t, titles[n])));
@@ -5661,7 +5663,9 @@ var AiChatLog_default = /* @__PURE__ */ defineComponent({
 							key: 2,
 							class: "ai-usage",
 							title: unref(t)("usageHint")
-						}, toDisplayString(unref(usageText)(e.usage, unref(t), unref(ai).locale())), 9, _hoisted_13$7)) : createCommentVNode("", true)
+						}, [(openBlock(true), createElementBlock(Fragment, null, renderList(unref(usageParts)(e.usage, unref(t), unref(ai).locale()), (part, i) => {
+							return openBlock(), createElementBlock("span", { key: i }, toDisplayString(part), 1);
+						}), 128))], 8, _hoisted_13$7)) : createCommentVNode("", true)
 					])) : e.role === "reminder" ? (openBlock(), createElementBlock("li", _hoisted_14$7, toDisplayString(unref(t)("reminder")), 1)) : e.role === "tool" && unref(state).approval && e.status === "awaiting" && unref(state).approval.toolCallId === e.toolCallId ? (openBlock(), createElementBlock("li", _hoisted_15$5, [createVNode(AiApproval_default, {
 						approval: unref(state).approval,
 						ai: unref(ai)

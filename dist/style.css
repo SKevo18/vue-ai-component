@@ -929,6 +929,9 @@ button.ai-chip {
   padding-right: 8px;
 }
 .ai-usage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 10px;
   margin-top: 4px;
   color: var(--vc-fg-faint);
   font-size: 11px;

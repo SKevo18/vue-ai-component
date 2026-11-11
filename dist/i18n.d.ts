@@ -25,8 +25,9 @@ export declare const en: {
     fewerChips: string;
     copy: string;
     copied: string;
-    usage: string;
-    usageCached: string;
+    usageIn: string;
+    usageInCached: string;
+    usageOut: string;
     usageHint: string;
     tokenTotal: string;
     sendHint: string;
