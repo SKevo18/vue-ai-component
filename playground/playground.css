@@ -105,6 +105,11 @@ body {
 .pg-muted {
   color: var(--vc-fg-muted);
 }
+.pg-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
 .pg-modal {
   position: fixed;
   inset: 0;

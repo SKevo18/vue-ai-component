@@ -5,7 +5,7 @@ import { componentAi } from "../../test/component-ai";
 import type { Ai } from "../ai";
 import AiChatLog from "./AiChatLog.vue";
 
-const messages = { en: { usage: "{input}|{output}", usageCached: "{input}|{cached}|{output}", reminder: "NUDGE", errors: { rate_limit: "BADGERS" } } };
+const messages = { en: { usageIn: "{input}", usageInCached: "{input}|{cached}", usageOut: "{output}", reminder: "NUDGE", errors: { rate_limit: "BADGERS" } } };
 
 async function mountLog(ai: Ai) {
   await ai.init();
@@ -25,7 +25,10 @@ describe("AiChatLog", () => {
     ];
     const w = await mountLog(ai);
     const compact = (n: number) => new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(n);
-    expect(w.findAll(".ai-usage").map((u) => u.text())).toEqual([`${compact(1234)}|${compact(1100)}|48`, `${compact(2_500_000)}|7`]);
+    expect(w.findAll(".ai-usage").map((u) => u.findAll("span").map((s) => s.text()))).toEqual([
+      [`${compact(1234)}|${compact(1100)}`, "48"],
+      [`${compact(2_500_000)}`, "7"],
+    ]);
   });
 
   it("shows plan reminders as a quiet line", async () => {

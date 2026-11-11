@@ -25,10 +25,16 @@ export function compactNumber(n: number, locale: string): string {
   return new Intl.NumberFormat(locale, { notation: "compact", maximumFractionDigits: 1 }).format(n);
 }
 
-export function usageText(usage: Usage, t: Translate, locale: string): string {
+/** input and output token counts, each its own label */
+export function usageParts(usage: Usage, t: Translate, locale: string): [string, string] {
   const input = compactNumber(usage.input, locale);
-  const output = compactNumber(usage.output, locale);
-  return usage.cached ? t("usageCached", { input, cached: compactNumber(usage.cached, locale), output }) : t("usage", { input, output });
+  const inPart = usage.cached ? t("usageInCached", { input, cached: compactNumber(usage.cached, locale) }) : t("usageIn", { input });
+  return [inPart, t("usageOut", { output: compactNumber(usage.output, locale) })];
+}
+
+/** one line for plain-text places such as tooltips, "1.2K in and 48 out" */
+export function usageText(usage: Usage, t: Translate, locale: string): string {
+  return new Intl.ListFormat(locale, { type: "conjunction" }).format(usageParts(usage, t, locale));
 }
 
 export function toolList(names: string[], t: Translate, locale: string, titles: Record<string, string> = {}): string {

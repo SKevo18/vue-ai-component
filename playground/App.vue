@@ -42,14 +42,17 @@ async function simulateRelay() {
           <button type="button" :class="{ active: context[0]?.uri === b.uri }" @click="openBurrow(b)">{{ b.label }} <code>{{ b.uri }}</code></button>
         </li>
       </ul>
-      <p><button type="button" class="pg-text-btn" @click="settingsOpen = true">AI settings</button> · <button type="button" class="pg-text-btn" @click="simulateRelay">Simulate a browser call</button></p>
+      <p class="pg-row"><button type="button" class="pg-text-btn" @click="settingsOpen = true">AI settings</button><button type="button" class="pg-text-btn" @click="simulateRelay">Simulate a browser call</button></p>
       <section v-if="opened.length" class="pg-opened">
         <h2>Opened resources</h2>
         <ul>
           <li v-for="(u, i) in opened" :key="i"><code>{{ u }}</code></li>
         </ul>
       </section>
-      <p class="pg-muted">Tab id: <code>{{ toolHost.tabId }}</code> · MCP: <code>{{ ai.state.mcp.burrows?.info?.serverInfo.name ?? "not connected yet" }}</code></p>
+      <p class="pg-muted pg-row">
+        <span>Tab id <code>{{ toolHost.tabId }}</code></span>
+        <span>MCP server <code>{{ ai.state.mcp.burrows?.info?.serverInfo.name ?? "not connected yet" }}</code></span>
+      </p>
       <p v-for="i in 12" :key="i" class="pg-muted">Filler paragraph {{ i }} so the page can scroll behind the sheet. Badgers dig, otters swim, herons wait.</p>
     </main>
     <AiSidebar v-model:open="open" @width="width = $event" />

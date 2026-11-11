@@ -4,7 +4,7 @@ import { computed, nextTick, onMounted, ref, watch } from "vue";
 import type { Ai, Suggestion } from "../ai";
 import type { Entry } from "../core/entries";
 import { useAiInstance, useElapsed } from "../ui/composables";
-import { toolLabel, usageText } from "../ui/labels";
+import { toolLabel, usageParts } from "../ui/labels";
 import { vTooltip } from "../ui/tooltip";
 import AiApproval from "./AiApproval.vue";
 import AiChips from "./AiChips.vue";
@@ -114,7 +114,9 @@ defineExpose({ scrollToEnd: () => scrollToEnd(true) });
         <li v-else-if="e.role === 'assistant' && visible(e)" class="ai-assistant">
           <AiReasoning v-if="e.reasoning" :text="e.reasoning" :streaming="e.streaming && !e.content" :t="t" :ai="ai" />
           <AiMarkdown v-if="e.content" :source="e.content" :streaming="e.streaming" :ai="ai" />
-          <div v-if="e.usage && !e.streaming && e.content" class="ai-usage" :title="t('usageHint')">{{ usageText(e.usage, t, ai.locale()) }}</div>
+          <div v-if="e.usage && !e.streaming && e.content" class="ai-usage" :title="t('usageHint')">
+            <span v-for="(part, i) in usageParts(e.usage, t, ai.locale())" :key="i">{{ part }}</span>
+          </div>
         </li>
         <li v-else-if="e.role === 'reminder'" class="ai-reminder">{{ t("reminder") }}</li>
         <li v-else-if="e.role === 'tool' && state.approval && e.status === 'awaiting' && state.approval.toolCallId === e.toolCallId">
@@ -233,6 +235,9 @@ defineExpose({ scrollToEnd: () => scrollToEnd(true) });
   padding-right: 8px;
 }
 .ai-usage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 10px;
   margin-top: 4px;
   color: var(--vc-fg-faint);
   font-size: 11px;
