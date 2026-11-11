@@ -18,6 +18,7 @@ export declare const en: {
     notConnected: string;
     connect: string;
     retry: string;
+    dismiss: string;
     dropFiles: string;
     moreChips: string;
     moreChipsLabel: string;

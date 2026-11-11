@@ -7,10 +7,20 @@ export interface ToolResult {
     images?: ImageRef[];
     links?: ResourceLink[];
 }
+/** a file the user attached to the chat, with its original bytes */
+export interface AttachedFile {
+    uri: string;
+    name: string;
+    mimeType: string;
+    size: number;
+    blob: Blob;
+}
 export interface ToolContext {
     signal: AbortSignal;
     conversationId: string;
     saveImage(image: ImageContent, name?: string): Promise<ImageRef>;
+    /** the files attached to this chat (sent messages and the composer), with their bytes */
+    files(): Promise<AttachedFile[]>;
     onProgress?(message: string): void;
 }
 export interface HarnessTool {

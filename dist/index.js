@@ -1700,13 +1700,16 @@ function mcpHarnessTool(tool, client, server, name = tool.name) {
 }
 // src/harness/catalog.ts
 var SKILL = /^skill:\/\//i;
+var LIST_TIMEOUT_MS = 15e3;
 function createCatalog(state, options, { servers, namespaces, locale, contextItems }) {
 	let toolsPromise = null;
 	const entries = Object.entries(servers.clients);
 	async function serverTools(id, client, refresh) {
+		const late = Promise.withResolvers();
+		const timer = setTimeout(() => late.reject(/* @__PURE__ */ new Error("The server did not answer in time.")), LIST_TIMEOUT_MS);
 		try {
-			const info = await client.connect();
-			const list = await client.listTools({ refresh });
+			const listing = (async () => [await client.connect(), await client.listTools({ refresh })])();
+			const [info, list] = await Promise.race([listing, late.promise]);
 			state.mcp[id] = {
 				info,
 				error: ""
@@ -1718,6 +1721,8 @@ function createCatalog(state, options, { servers, namespaces, locale, contextIte
 				error: errorText(e)
 			};
 			return [];
+		} finally {
+			clearTimeout(timer);
 		}
 	}
 	async function mcpTools(refresh) {
@@ -1749,9 +1754,12 @@ function createCatalog(state, options, { servers, namespaces, locale, contextIte
 		tools(refresh = false) {
 			if (!toolsPromise || refresh || Object.values(state.mcp).some((s) => s.error)) {
 				const builtins = [readTool(namespaces), planTool];
+				const local = (options.tools ?? []).filter((tool) => !builtins.some((b) => b.name === tool.name));
+				const taken = new Set([...builtins, ...local].map((tool) => tool.name));
 				toolsPromise = mcpTools(refresh).then((list) => {
-					state.toolTitles = Object.fromEntries(list.flatMap((tool) => tool.title ? [[tool.name, tool.title]] : []));
-					return [...list.filter((tool) => !builtins.some((b) => b.name === tool.name)), ...builtins];
+					const offered = [...list.filter((tool) => !taken.has(tool.name)), ...local];
+					state.toolTitles = Object.fromEntries(offered.flatMap((tool) => tool.title ? [[tool.name, tool.title]] : []));
+					return [...offered, ...builtins];
 				});
 			}
 			return toolsPromise;
@@ -2031,6 +2039,7 @@ var en = {
 	notConnected: "Connect an AI provider to start chatting.",
 	connect: "Connect AI",
 	retry: "Retry",
+	dismiss: "Dismiss",
 	dropFiles: "Drop files to attach",
 	moreChips: "+{count}",
 	moreChipsLabel: "Show {count} more",
@@ -2211,6 +2220,7 @@ var sk = {
 	notConnected: "Na chatovanie pripojte poskytovateľa AI.",
 	connect: "Pripojiť AI",
 	retry: "Skúsiť znova",
+	dismiss: "Skryť",
 	dropFiles: "Pustite súbory, ktoré chcete priložiť",
 	moreChips: "+{count}",
 	moreChipsLabel: "Zobraziť ďalšie ({count})",
@@ -3506,6 +3516,7 @@ function createAi(options) {
 			info: null,
 			error: ""
 		}])),
+		dismissedTools: "",
 		storageError: "",
 		adding: [],
 		attachError: "",
@@ -3625,7 +3636,7 @@ function createAi(options) {
 		const work = async () => {
 			const list = await catalog.tools();
 			const mcpError = serverErrors(state.mcp);
-			if (mcpError) state.error = {
+			if (mcpError && mcpError !== state.dismissedTools) state.error = {
 				kind: "tools",
 				message: t("errors.tools", { message: mcpError })
 			};
@@ -3642,7 +3653,8 @@ function createAi(options) {
 				loadImage: (ref) => namespaces.image(ref),
 				context: {
 					conversationId,
-					saveImage: attachments.saveImage
+					saveImage: attachments.saveImage,
+					files: attachments.files
 				},
 				onActivity(activity) {
 					state.activity = activity;
@@ -3804,6 +3816,14 @@ function createAi(options) {
 		},
 		stop,
 		decide: (decision) => approvals.decide(decision),
+		dismissError(notice) {
+			if (notice === "storage") {
+				state.storageError = "";
+				return;
+			}
+			if (notice === "tools" || state.error?.kind === "tools") state.dismissedTools = serverErrors(state.mcp);
+			if (!notice) state.error = null;
+		},
 		setChatAutoApprove(on) {
 			state.chatAutoApprove = on;
 			approvals.recheck();
@@ -4964,11 +4984,11 @@ var _hoisted_9$11 = {
 	role: "status",
 	class: "ai-approval-hint"
 };
-var _hoisted_10$9 = {
+var _hoisted_10$10 = {
 	key: 4,
 	class: "ai-args ai-approval-fields"
 };
-var _hoisted_11$9 = { class: "ai-long" };
+var _hoisted_11$10 = { class: "ai-long" };
 var _hoisted_12$9 = {
 	key: 5,
 	class: "ai-approval-diff"
@@ -5031,8 +5051,8 @@ var AiApproval_default = /* @__PURE__ */ defineComponent({
 					preview.value?.summary ? (openBlock(), createElementBlock("p", _hoisted_7$11, toDisplayString(preview.value.summary), 1)) : createCommentVNode("", true),
 					__props.approval.previewLoading ? (openBlock(), createElementBlock("p", _hoisted_8$11, toDisplayString(unref(t)("approval.previewLoading")), 1)) : createCommentVNode("", true),
 					__props.approval.previewError ? (openBlock(), createElementBlock("p", _hoisted_9$11, toDisplayString(unref(t)("approval.previewError")), 1)) : createCommentVNode("", true),
-					preview.value?.fields?.length ? (openBlock(), createElementBlock("dl", _hoisted_10$9, [(openBlock(true), createElementBlock(Fragment, null, renderList(preview.value.fields, (field, index) => {
-						return openBlock(), createElementBlock(Fragment, { key: index }, [createElementVNode("dt", null, toDisplayString(field.label), 1), createElementVNode("dd", _hoisted_11$9, toDisplayString(field.value), 1)], 64);
+					preview.value?.fields?.length ? (openBlock(), createElementBlock("dl", _hoisted_10$10, [(openBlock(true), createElementBlock(Fragment, null, renderList(preview.value.fields, (field, index) => {
+						return openBlock(), createElementBlock(Fragment, { key: index }, [createElementVNode("dt", null, toDisplayString(field.label), 1), createElementVNode("dd", _hoisted_11$10, toDisplayString(field.value), 1)], 64);
 					}), 128))])) : createCommentVNode("", true),
 					diff.value ? (openBlock(), createElementBlock("div", _hoisted_12$9, [
 						createElementVNode("p", _hoisted_13$9, toDisplayString(diff.value.truncated ? unref(t)("approval.truncated") : !diff.value.added && !diff.value.removed ? unref(t)("approval.noChange") : unref(t)("approval.summary", {
@@ -5327,8 +5347,8 @@ var _hoisted_8$10 = {
 	class: "ai-tool-extra"
 };
 var _hoisted_9$10 = ["onClick"];
-var _hoisted_10$8 = { class: "ai-truncate" };
-var _hoisted_11$8 = ["src"];
+var _hoisted_10$9 = { class: "ai-truncate" };
+var _hoisted_11$9 = ["src"];
 var _hoisted_12$8 = {
 	key: 3,
 	class: "ai-tool-body"
@@ -5417,7 +5437,7 @@ var AiToolCard_default = /* @__PURE__ */ defineComponent({
 						type: "button",
 						class: "ai-chip",
 						onClick: ($event) => __props.ai.openResource(link.uri)
-					}, [(openBlock(), createBlock(resolveDynamicComponent(unref(chipIcon)(void 0, link.uri)))), createElementVNode("span", _hoisted_10$8, toDisplayString(link.title || link.name || link.uri), 1)], 8, _hoisted_9$10)), [[unref(vTooltip), link.uri]]);
+					}, [(openBlock(), createBlock(resolveDynamicComponent(unref(chipIcon)(void 0, link.uri)))), createElementVNode("span", _hoisted_10$9, toDisplayString(link.title || link.name || link.uri), 1)], 8, _hoisted_9$10)), [[unref(vTooltip), link.uri]]);
 				}), 128)), (openBlock(true), createElementBlock(Fragment, null, renderList(urls.value, (src, i) => {
 					return openBlock(), createElementBlock("img", {
 						key: i,
@@ -5425,7 +5445,7 @@ var AiToolCard_default = /* @__PURE__ */ defineComponent({
 						class: "ai-tool-image",
 						alt: "",
 						loading: "lazy"
-					}, null, 8, _hoisted_11$8);
+					}, null, 8, _hoisted_11$9);
 				}), 128))])) : createCommentVNode("", true),
 				open.value ? (openBlock(), createElementBlock("div", _hoisted_12$8, [rows.value.length ? (openBlock(), createElementBlock("div", _hoisted_13$8, [createElementVNode("div", _hoisted_14$8, toDisplayString(unref(t)("tool.arguments")), 1), createElementVNode("dl", _hoisted_15$6, [(openBlock(true), createElementBlock(Fragment, null, renderList(rows.value, (row) => {
 					return openBlock(), createElementBlock(Fragment, { key: row.key }, [createElementVNode("dt", null, toDisplayString(row.key), 1), createElementVNode("dd", { class: normalizeClass({ "ai-long": row.long }) }, toDisplayString(row.value), 3)], 64);
@@ -5462,8 +5482,8 @@ var _hoisted_9$9 = {
 	key: 0,
 	class: "ai-user"
 };
-var _hoisted_10$7 = { class: "ai-bubble" };
-var _hoisted_11$7 = {
+var _hoisted_10$8 = { class: "ai-bubble" };
+var _hoisted_11$8 = {
 	key: 0,
 	class: "ai-user-chips"
 };
@@ -5568,7 +5588,7 @@ var AiChatLog_default = /* @__PURE__ */ defineComponent({
 				"aria-live": "polite",
 				onScrollPassive: onScroll
 			}, [
-				!unref(state).connectionsLoaded ? (openBlock(), createElementBlock("div", _hoisted_1$12, [..._cache[4] || (_cache[4] = [createElementVNode("span", { class: "ai-spinner" }, null, -1)])])) : !unref(ai).ready && !unref(state).entries.length ? (openBlock(), createElementBlock("div", _hoisted_2$11, [
+				!unref(state).connectionsLoaded ? (openBlock(), createElementBlock("div", _hoisted_1$12, [..._cache[5] || (_cache[5] = [createElementVNode("span", { class: "ai-spinner" }, null, -1)])])) : !unref(ai).ready && !unref(state).entries.length ? (openBlock(), createElementBlock("div", _hoisted_2$11, [
 					createElementVNode("div", _hoisted_3$10, [createVNode(unref(Sparkles))]),
 					createElementVNode("p", null, toDisplayString(unref(state).connectionsError || unref(t)("notConnected")), 1),
 					unref(ai).options.openSettings ? (openBlock(), createElementBlock("button", {
@@ -5589,7 +5609,7 @@ var AiChatLog_default = /* @__PURE__ */ defineComponent({
 						}, toDisplayString(s.label), 9, _hoisted_7$9);
 					}), 128))])) : createCommentVNode("", true)
 				])])) : (openBlock(), createElementBlock("ol", _hoisted_8$9, [(openBlock(true), createElementBlock(Fragment, null, renderList(unref(state).entries, (e) => {
-					return openBlock(), createElementBlock(Fragment, { key: e.id }, [e.role === "user" ? (openBlock(), createElementBlock("li", _hoisted_9$9, [createElementVNode("div", _hoisted_10$7, toDisplayString(e.content), 1), e.resources?.length ? (openBlock(), createElementBlock("div", _hoisted_11$7, [createVNode(AiChips_default, {
+					return openBlock(), createElementBlock(Fragment, { key: e.id }, [e.role === "user" ? (openBlock(), createElementBlock("li", _hoisted_9$9, [createElementVNode("div", _hoisted_10$8, toDisplayString(e.content), 1), e.resources?.length ? (openBlock(), createElementBlock("div", _hoisted_11$8, [createVNode(AiChips_default, {
 						items: e.resources,
 						t: unref(t),
 						onOpen: _cache[1] || (_cache[1] = (r) => unref(ai).openResource(r.uri))
@@ -5629,7 +5649,7 @@ var AiChatLog_default = /* @__PURE__ */ defineComponent({
 						ai: unref(ai)
 					}, null, 8, ["entry", "ai"])])) : createCommentVNode("", true)], 64);
 				}), 128))])),
-				unref(state).running && unref(state).activity.kind && !streamingVisible.value && !unref(state).approval ? (openBlock(), createElementBlock("div", _hoisted_17$5, [_cache[5] || (_cache[5] = createElementVNode("span", {
+				unref(state).running && unref(state).activity.kind && !streamingVisible.value && !unref(state).approval ? (openBlock(), createElementBlock("div", _hoisted_17$5, [_cache[6] || (_cache[6] = createElementVNode("span", {
 					class: "ai-pulse",
 					"aria-hidden": "true"
 				}, null, -1)), createElementVNode("span", _hoisted_18$3, toDisplayString(activityText.value), 1)])) : createCommentVNode("", true),
@@ -5647,7 +5667,12 @@ var AiChatLog_default = /* @__PURE__ */ defineComponent({
 						type: "button",
 						class: "ai-icon-btn ai-sm",
 						onClick: _cache[3] || (_cache[3] = ($event) => unref(ai).retry())
-					}, [createVNode(unref(RotateCcw))])), [[unref(vTooltip), unref(t)("retry")]]) : createCommentVNode("", true)
+					}, [createVNode(unref(RotateCcw))])), [[unref(vTooltip), unref(t)("retry")]]) : createCommentVNode("", true),
+					withDirectives((openBlock(), createElementBlock("button", {
+						type: "button",
+						class: "ai-icon-btn ai-sm",
+						onClick: _cache[4] || (_cache[4] = ($event) => unref(ai).dismissError())
+					}, [createVNode(unref(X))])), [[unref(vTooltip), unref(t)("dismiss")]])
 				])) : createCommentVNode("", true)
 			], 544);
 		};
@@ -6070,8 +6095,8 @@ var _hoisted_8$7 = [
 	"disabled"
 ];
 var _hoisted_9$7 = { class: "ai-input-row" };
-var _hoisted_10$6 = ["disabled"];
-var _hoisted_11$6 = ["aria-pressed", "disabled"];
+var _hoisted_10$7 = ["disabled"];
+var _hoisted_11$7 = ["aria-pressed", "disabled"];
 var _hoisted_12$6 = {
 	key: 0,
 	class: "ai-token-total"
@@ -6354,14 +6379,14 @@ var AiComposer_default = /* @__PURE__ */ defineComponent({
 						class: "ai-icon-btn ai-sm",
 						disabled: !unref(ai).ready,
 						onClick: _cache[4] || (_cache[4] = ($event) => files.value?.click())
-					}, [createVNode(unref(Paperclip))], 8, _hoisted_10$6)), [[unref(vTooltip), unref(t)("attach")]]),
+					}, [createVNode(unref(Paperclip))], 8, _hoisted_10$7)), [[unref(vTooltip), unref(t)("attach")]]),
 					withDirectives((openBlock(), createElementBlock("button", {
 						type: "button",
 						class: "ai-icon-btn ai-sm",
 						"aria-pressed": pickerOpen.value,
 						disabled: !unref(ai).ready,
 						onClick: openPicker
-					}, [createVNode(unref(AtSign))], 8, _hoisted_11$6)), [[unref(vTooltip), unref(t)("mention")]]),
+					}, [createVNode(unref(AtSign))], 8, _hoisted_11$7)), [[unref(vTooltip), unref(t)("mention")]]),
 					tokenTotal.value ? withDirectives((openBlock(), createElementBlock("span", _hoisted_12$6, [createTextVNode(toDisplayString(unref(t)("tokenTotal", { count: unref(compactNumber)(tokenTotal.value, unref(ai).locale()) })), 1)])), [[unref(vTooltip), unref(usageText)(tokenUsage.value, unref(t), unref(ai).locale())]]) : createCommentVNode("", true),
 					_cache[11] || (_cache[11] = createElementVNode("span", { class: "ai-spacer" }, null, -1)),
 					withDirectives((openBlock(), createBlock(AiSwitch_default, {
@@ -6434,8 +6459,8 @@ var _hoisted_6$6 = { class: "ai-history-title ai-truncate" };
 var _hoisted_7$6 = ["onClick"];
 var _hoisted_8$6 = ["onClick"];
 var _hoisted_9$6 = { class: "ai-history-title ai-truncate" };
-var _hoisted_10$5 = { class: "ai-history-date" };
-var _hoisted_11$5 = ["onClick"];
+var _hoisted_10$6 = { class: "ai-history-date" };
+var _hoisted_11$6 = ["onClick"];
 var _hoisted_12$5 = ["onClick"];
 var _hoisted_13$5 = ["onClick"];
 var _hoisted_14$5 = {
@@ -6578,12 +6603,12 @@ var AiHistory_default = /* @__PURE__ */ defineComponent({
 							type: "button",
 							class: "ai-history-open",
 							onClick: ($event) => open(h.id)
-						}, [createElementVNode("span", _hoisted_9$6, toDisplayString(h.title || unref(t)("historyView.untitled")), 1), createElementVNode("span", _hoisted_10$5, toDisplayString(h.id === unref(state).conversationId ? unref(t)("historyView.current") : format(h.updatedAt)), 1)], 8, _hoisted_8$6),
+						}, [createElementVNode("span", _hoisted_9$6, toDisplayString(h.title || unref(t)("historyView.untitled")), 1), createElementVNode("span", _hoisted_10$6, toDisplayString(h.id === unref(state).conversationId ? unref(t)("historyView.current") : format(h.updatedAt)), 1)], 8, _hoisted_8$6),
 						withDirectives((openBlock(), createElementBlock("button", {
 							type: "button",
 							class: "ai-icon-btn ai-sm ai-history-action",
 							onClick: ($event) => download(h.id)
-						}, [createVNode(unref(FileDown))], 8, _hoisted_11$5)), [[unref(vTooltip), unref(t)("historyView.export")]]),
+						}, [createVNode(unref(FileDown))], 8, _hoisted_11$6)), [[unref(vTooltip), unref(t)("historyView.export")]]),
 						withDirectives((openBlock(), createElementBlock("button", {
 							type: "button",
 							class: "ai-icon-btn ai-sm ai-history-action",
@@ -6645,8 +6670,8 @@ var _hoisted_9$5 = {
 	key: 1,
 	class: "ai-model-error"
 };
-var _hoisted_10$4 = ["aria-selected", "onClick"];
-var _hoisted_11$4 = { class: "ai-picker-text" };
+var _hoisted_10$5 = ["aria-selected", "onClick"];
+var _hoisted_11$5 = { class: "ai-picker-text" };
 var _hoisted_12$4 = { class: "ai-truncate" };
 var _hoisted_13$4 = {
 	key: 0,
@@ -6762,10 +6787,10 @@ var AiModelSwitch_default = /* @__PURE__ */ defineComponent({
 								class: "ai-menu-item",
 								"aria-selected": shown.value === unref(ai).connection?.id && m.id === unref(ai).model,
 								onClick: ($event) => pick(m.id)
-							}, [createElementVNode("span", _hoisted_11$4, [createElementVNode("span", _hoisted_12$4, toDisplayString(m.name || m.id), 1), m.name && m.name !== m.id ? (openBlock(), createElementBlock("span", _hoisted_13$4, toDisplayString(m.id), 1)) : createCommentVNode("", true)]), shown.value === unref(ai).connection?.id && m.id === unref(ai).model ? (openBlock(), createBlock(unref(Check), {
+							}, [createElementVNode("span", _hoisted_11$5, [createElementVNode("span", _hoisted_12$4, toDisplayString(m.name || m.id), 1), m.name && m.name !== m.id ? (openBlock(), createElementBlock("span", _hoisted_13$4, toDisplayString(m.id), 1)) : createCommentVNode("", true)]), shown.value === unref(ai).connection?.id && m.id === unref(ai).model ? (openBlock(), createBlock(unref(Check), {
 								key: 0,
 								class: "ai-model-check"
-							})) : createCommentVNode("", true)], 8, _hoisted_10$4);
+							})) : createCommentVNode("", true)], 8, _hoisted_10$5);
 						}), 128)),
 						custom.value ? (openBlock(), createElementBlock("button", {
 							key: 2,
@@ -6803,8 +6828,8 @@ var _hoisted_8$4 = {
 	class: "ai-preview-error"
 };
 var _hoisted_9$4 = ["src", "alt"];
-var _hoisted_10$3 = { key: 3 };
-var _hoisted_11$3 = { key: 4 };
+var _hoisted_10$4 = { key: 3 };
+var _hoisted_11$4 = { key: 4 };
 var _hoisted_12$3 = {
 	key: 0,
 	class: "ai-preview-footer"
@@ -6962,8 +6987,8 @@ var AiResourcePreview_default = /* @__PURE__ */ defineComponent({
 						alt: title.value,
 						onError: _cache[0] || (_cache[0] = ($event) => error.value = unref(t)("preview.imageError"))
 					}, null, 40, _hoisted_9$4)) : createCommentVNode("", true),
-					content.value?.text !== void 0 ? (openBlock(), createElementBlock("pre", _hoisted_10$3, toDisplayString(content.value.text), 1)) : createCommentVNode("", true),
-					!loading.value && !error.value && content.value && !image.value && content.value.text === void 0 ? (openBlock(), createElementBlock("p", _hoisted_11$3, toDisplayString(unref(t)("preview.empty")), 1)) : createCommentVNode("", true)
+					content.value?.text !== void 0 ? (openBlock(), createElementBlock("pre", _hoisted_10$4, toDisplayString(content.value.text), 1)) : createCommentVNode("", true),
+					!loading.value && !error.value && content.value && !image.value && content.value.text === void 0 ? (openBlock(), createElementBlock("p", _hoisted_11$4, toDisplayString(unref(t)("preview.empty")), 1)) : createCommentVNode("", true)
 				], 8, _hoisted_6$4),
 				content.value && ((content.value.pages ?? 1) > 1 || offsets.value.length || content.value.nextOffset !== void 0) ? (openBlock(), createElementBlock("footer", _hoisted_12$3, [(content.value.pages ?? 1) > 1 ? (openBlock(), createElementBlock("nav", {
 					key: 0,
@@ -7024,12 +7049,14 @@ var _hoisted_7$3 = {
 	key: 0,
 	class: "ai-notice"
 };
-var _hoisted_8$3 = {
+var _hoisted_8$3 = { class: "ai-notice-text" };
+var _hoisted_9$3 = {
 	key: 1,
 	class: "ai-notice",
 	role: "alert"
 };
-var _hoisted_9$3 = {
+var _hoisted_10$3 = { class: "ai-notice-text" };
+var _hoisted_11$3 = {
 	key: 4,
 	class: "ai-drop"
 };
@@ -7136,7 +7163,7 @@ var AiSidebar_default = /* @__PURE__ */ defineComponent({
 				style: normalizeStyle(style.value),
 				"aria-label": unref(t)("title"),
 				onDragover: onDragOver,
-				onDragleave: _cache[5] || (_cache[5] = withModifiers(($event) => dragging.value = false, ["self"])),
+				onDragleave: _cache[7] || (_cache[7] = withModifiers(($event) => dragging.value = false, ["self"])),
 				onDrop: withModifiers(onDrop, ["prevent"]),
 				onKeydown: onKey
 			}, [
@@ -7180,12 +7207,20 @@ var AiSidebar_default = /* @__PURE__ */ defineComponent({
 						}, [createVNode(unref(X))])), [[unref(vTooltip), unref(t)("close")]])
 					])
 				]),
-				unref(state).approval === null && mcpError.value && !unref(state).running && unref(state).error?.kind !== "tools" ? (openBlock(), createElementBlock("div", _hoisted_7$3, toDisplayString(unref(t)("errors.tools", { message: mcpError.value })), 1)) : createCommentVNode("", true),
-				unref(state).storageError ? (openBlock(), createElementBlock("div", _hoisted_8$3, toDisplayString(unref(t)("errors.storage", { message: unref(state).storageError })), 1)) : createCommentVNode("", true),
+				unref(state).approval === null && mcpError.value && mcpError.value !== unref(state).dismissedTools && !unref(state).running && unref(state).error?.kind !== "tools" ? (openBlock(), createElementBlock("div", _hoisted_7$3, [createElementVNode("span", _hoisted_8$3, toDisplayString(unref(t)("errors.tools", { message: mcpError.value })), 1), withDirectives((openBlock(), createElementBlock("button", {
+					type: "button",
+					class: "ai-icon-btn ai-sm",
+					onClick: _cache[3] || (_cache[3] = ($event) => unref(ai).dismissError("tools"))
+				}, [createVNode(unref(X))])), [[unref(vTooltip), unref(t)("dismiss")]])])) : createCommentVNode("", true),
+				unref(state).storageError ? (openBlock(), createElementBlock("div", _hoisted_9$3, [createElementVNode("span", _hoisted_10$3, toDisplayString(unref(t)("errors.storage", { message: unref(state).storageError })), 1), withDirectives((openBlock(), createElementBlock("button", {
+					type: "button",
+					class: "ai-icon-btn ai-sm",
+					onClick: _cache[4] || (_cache[4] = ($event) => unref(ai).dismissError("storage"))
+				}, [createVNode(unref(X))])), [[unref(vTooltip), unref(t)("dismiss")]])])) : createCommentVNode("", true),
 				historyOpen.value ? (openBlock(), createBlock(AiHistory_default, {
 					key: 2,
 					ai: unref(ai),
-					onOpen: _cache[3] || (_cache[3] = ($event) => historyOpen.value = false)
+					onOpen: _cache[5] || (_cache[5] = ($event) => historyOpen.value = false)
 				}, null, 8, ["ai"])) : (openBlock(), createElementBlock(Fragment, { key: 3 }, [createVNode(AiChatLog_default, { ai: unref(ai) }, createSlots({ _: 2 }, [_ctx.$slots.empty ? {
 					name: "empty",
 					fn: withCtx(() => [renderSlot(_ctx.$slots, "empty")]),
@@ -7196,13 +7231,13 @@ var AiSidebar_default = /* @__PURE__ */ defineComponent({
 					ai: unref(ai),
 					boundary: root.value,
 					autofocus: unref(docked),
-					onEscape: _cache[4] || (_cache[4] = ($event) => sheet.value && close())
+					onEscape: _cache[6] || (_cache[6] = ($event) => sheet.value && close())
 				}, null, 8, [
 					"ai",
 					"boundary",
 					"autofocus"
 				])], 64)),
-				dragging.value ? (openBlock(), createElementBlock("div", _hoisted_9$3, toDisplayString(unref(t)("dropFiles")), 1)) : createCommentVNode("", true)
+				dragging.value ? (openBlock(), createElementBlock("div", _hoisted_11$3, toDisplayString(unref(t)("dropFiles")), 1)) : createCommentVNode("", true)
 			], 46, _hoisted_1$3)) : createCommentVNode("", true), createVNode(AiResourcePreview_default, { ai: unref(ai) }, null, 8, ["ai"])], 64);
 		};
 	}

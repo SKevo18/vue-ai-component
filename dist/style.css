@@ -1555,12 +1555,24 @@ button.ai-chip {
   margin-left: -6px;
 }
 .ai-notice {
+  display: flex;
   flex: none;
-  padding: 6px 12px;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 6px 6px 12px;
   border-bottom: 1px solid var(--vc-border);
   background: var(--vc-warning-soft);
   color: var(--vc-fg-strong);
   font-size: 12px;
+}
+.ai-notice-text {
+  flex: 1;
+  min-width: 0;
+  padding-top: 4px;
+  overflow-wrap: anywhere;
+}
+.ai-notice .ai-icon-btn {
+  margin: -1px 0;
 }
 .ai-sheet .ai-composer {
   padding-bottom: max(10px, env(safe-area-inset-bottom));

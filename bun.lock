@@ -28,8 +28,12 @@
       },
       "peerDependencies": {
         "@lucide/vue": "^1.52.0",
+        "pyodide": ">=314.0.0",
         "vue": "^3.5.0",
       },
+      "optionalPeers": [
+        "pyodide",
+      ],
     },
   },
   "packages": {
