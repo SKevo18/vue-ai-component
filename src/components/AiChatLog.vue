@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AlertCircle, RotateCcw, Settings, Sparkles } from "@lucide/vue";
+import { AlertCircle, RotateCcw, Settings, Sparkles, X } from "@lucide/vue";
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import type { Ai, Suggestion } from "../ai";
 import type { Entry } from "../core/entries";
@@ -132,6 +132,7 @@ defineExpose({ scrollToEnd: () => scrollToEnd(true) });
       <span class="ai-error-text"><strong v-if="errorHeadline" class="ai-error-headline">{{ errorHeadline }}</strong> {{ state.error.message }}</span>
       <button v-if="state.error.kind === 'auth' && ai.options.openSettings" v-tooltip="t('settings')" type="button" class="ai-icon-btn ai-sm" @click="ai.options.openSettings()"><Settings /></button>
       <button v-if="!state.running && state.error.kind !== 'tools' && state.entries.length" v-tooltip="t('retry')" type="button" class="ai-icon-btn ai-sm" @click="ai.retry()"><RotateCcw /></button>
+      <button v-tooltip="t('dismiss')" type="button" class="ai-icon-btn ai-sm" @click="ai.dismissError()"><X /></button>
     </div>
   </div>
 </template>

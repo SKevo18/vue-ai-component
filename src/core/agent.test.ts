@@ -39,7 +39,7 @@ function setup(replies: (ChatResponse | Error | ((req: ChatRequest) => ChatRespo
     needsApproval: (t) => t.approval !== "auto",
     confirm: async () => true,
     loadImage: async (ref) => ({ mimeType: "image/png", data: `img:${ref.uri}` }),
-    context: { conversationId: "c1", saveImage: async () => ({ uri: "attachment://x" }) },
+    context: { conversationId: "c1", saveImage: async () => ({ uri: "attachment://x" }), files: async () => [] },
     signal: new AbortController().signal,
     newId,
     ...extra,

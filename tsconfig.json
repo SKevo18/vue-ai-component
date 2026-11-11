@@ -8,5 +8,5 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src/**/*.ts", "src/**/*.vue", "test/**/*.ts", "playground/**/*.ts", "playground/**/*.vue", "vite.config.ts", "vitest.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.vue", "test/**/*.ts", "playground/**/*.ts", "playground/**/*.vue", "vite.config.ts", "vite.workers.config.ts", "vitest.config.ts"]
 }

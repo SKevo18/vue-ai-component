@@ -13,6 +13,18 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./code": {
+      "types": "./dist/code/index.d.ts",
+      "import": "./dist/code.js"
+    },
+    "./code/worker": {
+      "types": "./dist/code/worker/index.d.ts",
+      "import": "./dist/code-worker.js"
+    },
+    "./vite": {
+      "types": "./dist/vite.d.ts",
+      "import": "./dist/vite.js"
+    },
     "./style.css": "./dist/style.css"
   },
   "files": [
@@ -23,13 +35,19 @@
   ],
   "scripts": {
     "dev": "vite --config playground/vite.config.ts",
-    "build": "vite build && vue-tsc -p tsconfig.build.json",
+    "build": "vite build && vite build --config vite.workers.config.ts && WORKER=python vite build --config vite.workers.config.ts && vue-tsc -p tsconfig.build.json",
     "check": "vue-tsc -p tsconfig.json --noEmit && vitest run",
     "test": "vitest run"
   },
   "peerDependencies": {
     "@lucide/vue": "^1.52.0",
+    "pyodide": ">=314.0.0",
     "vue": "^3.5.0"
+  },
+  "peerDependenciesMeta": {
+    "pyodide": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@floating-ui/dom": "^1.8.0",
@@ -46,6 +64,7 @@
     "fake-indexeddb": "^6.2.7",
     "happy-dom": "^21.0.4",
     "jsdom": "^30.1.3",
+    "pyodide": "314.0.7",
     "typescript": "~6.0.3",
     "vite": "^8.3.5",
     "vitest": "^5.0.5",

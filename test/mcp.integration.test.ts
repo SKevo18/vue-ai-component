@@ -74,7 +74,7 @@ describe.skipIf(!go)("MCP client against the Go fixture server", () => {
     const c = client();
     const tool = mcpHarnessTool((await c.listTools()).find((t) => t.name === "burrow_photo")!, c, "burrows");
     const saved: string[] = [];
-    const result = await tool.run({ id: 2 }, { signal: new AbortController().signal, conversationId: "c", saveImage: async (img) => (saved.push(img.mimeType), { uri: "attachment://photo" }) });
+    const result = await tool.run({ id: 2 }, { signal: new AbortController().signal, conversationId: "c", files: async () => [], saveImage: async (img) => (saved.push(img.mimeType), { uri: "attachment://photo" }) });
     expect(tool.readOnly).toBe(true);
     expect(saved).toEqual(["image/png"]);
     expect(result).toMatchObject({ images: [{ uri: "attachment://photo" }] });
@@ -115,7 +115,7 @@ describe.skipIf(!go)("MCP client against the Go fixture server", () => {
     const c = createMcpClient({ url: fixture.url.replace(/\/mcp$/, "/mcp-sse"), headers: () => ({ Authorization: `Bearer ${FIXTURE_TOKEN}` }) });
     const tool = mcpHarnessTool((await c.listTools()).find((t) => t.name === "progress_dig")!, c, "burrows");
     const messages: string[] = [];
-    await tool.run({ steps: 2, ms: 20 }, { signal: new AbortController().signal, conversationId: "c", saveImage: async () => ({ uri: "attachment://x" }), onProgress: (m) => messages.push(m) });
+    await tool.run({ steps: 2, ms: 20 }, { signal: new AbortController().signal, conversationId: "c", files: async () => [], saveImage: async () => ({ uri: "attachment://x" }), onProgress: (m) => messages.push(m) });
     expect(messages).toEqual(["dug 1 of 2", "dug 2 of 2"]);
   });
 

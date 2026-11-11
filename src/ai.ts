@@ -70,6 +70,7 @@ export function createAi(options: AiOptions): Ai & { install(app: App): void } {
     history: [],
     draft: "",
     mcp: Object.fromEntries(Object.keys(servers.clients).map((id) => [id, { info: null, error: "" }])),
+    dismissedTools: "",
     storageError: "",
     adding: [],
     attachError: "",
@@ -166,7 +167,7 @@ export function createAi(options: AiOptions): Ai & { install(app: App): void } {
     const work = async () => {
       const list = await catalog.tools();
       const mcpError = serverErrors(state.mcp);
-      if (mcpError) state.error = { kind: "tools", message: t("errors.tools", { message: mcpError }) };
+      if (mcpError && mcpError !== state.dismissedTools) state.error = { kind: "tools", message: t("errors.tools", { message: mcpError }) };
       await runAgent({
         chat: connectionChat(target.connection, options.backend.transport(target.connection.id)),
         model: target.model,
@@ -178,7 +179,7 @@ export function createAi(options: AiOptions): Ai & { install(app: App): void } {
         needsApproval: approvals.needsApproval,
         confirm: (tool, entry) => approvals.confirm(tool, entry, signal, conversationId),
         loadImage: (ref) => namespaces.image(ref),
-        context: { conversationId, saveImage: attachments.saveImage },
+        context: { conversationId, saveImage: attachments.saveImage, files: attachments.files },
         onActivity(activity) {
           state.activity = activity;
           if (activity.kind === "tool" || activity.kind === "thinking") scheduleSave();
@@ -334,6 +335,14 @@ export function createAi(options: AiOptions): Ai & { install(app: App): void } {
     },
     stop,
     decide: (decision: Decision) => approvals.decide(decision),
+    dismissError(notice?: "tools" | "storage") {
+      if (notice === "storage") {
+        state.storageError = "";
+        return;
+      }
+      if (notice === "tools" || state.error?.kind === "tools") state.dismissedTools = serverErrors(state.mcp);
+      if (!notice) state.error = null;
+    },
     setChatAutoApprove(on: boolean) {
       state.chatAutoApprove = on;
       approvals.recheck();

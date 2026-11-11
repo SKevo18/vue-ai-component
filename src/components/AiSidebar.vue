@@ -133,8 +133,14 @@ function close() {
         <button v-tooltip="t('close')" type="button" class="ai-icon-btn" @click="close"><X /></button>
       </div>
     </header>
-    <div v-if="state.approval === null && mcpError && !state.running && state.error?.kind !== 'tools'" class="ai-notice">{{ t("errors.tools", { message: mcpError }) }}</div>
-    <div v-if="state.storageError" class="ai-notice" role="alert">{{ t("errors.storage", { message: state.storageError }) }}</div>
+    <div v-if="state.approval === null && mcpError && mcpError !== state.dismissedTools && !state.running && state.error?.kind !== 'tools'" class="ai-notice">
+      <span class="ai-notice-text">{{ t("errors.tools", { message: mcpError }) }}</span>
+      <button v-tooltip="t('dismiss')" type="button" class="ai-icon-btn ai-sm" @click="ai.dismissError('tools')"><X /></button>
+    </div>
+    <div v-if="state.storageError" class="ai-notice" role="alert">
+      <span class="ai-notice-text">{{ t("errors.storage", { message: state.storageError }) }}</span>
+      <button v-tooltip="t('dismiss')" type="button" class="ai-icon-btn ai-sm" @click="ai.dismissError('storage')"><X /></button>
+    </div>
     <AiHistory v-if="historyOpen" :ai="ai" @open="historyOpen = false" />
     <template v-else>
       <AiChatLog :ai="ai">
@@ -209,12 +215,24 @@ function close() {
   margin-left: -6px;
 }
 .ai-notice {
+  display: flex;
   flex: none;
-  padding: 6px 12px;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 6px 6px 12px;
   border-bottom: 1px solid var(--vc-border);
   background: var(--vc-warning-soft);
   color: var(--vc-fg-strong);
   font-size: 12px;
+}
+.ai-notice-text {
+  flex: 1;
+  min-width: 0;
+  padding-top: 4px;
+  overflow-wrap: anywhere;
+}
+.ai-notice .ai-icon-btn {
+  margin: -1px 0;
 }
 .ai-sheet .ai-composer {
   padding-bottom: max(10px, env(safe-area-inset-bottom));

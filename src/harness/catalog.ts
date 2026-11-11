@@ -27,20 +27,26 @@ interface Dependencies {
 }
 
 const SKILL = /^skill:\/\//i;
+const LIST_TIMEOUT_MS = 15000;
 
 export function createCatalog(state: AiState, options: AiOptions, { servers, namespaces, locale, contextItems }: Dependencies): Catalog {
   let toolsPromise: Promise<HarnessTool[]> | null = null;
   const entries = Object.entries(servers.clients);
 
   async function serverTools(id: string, client: McpClient, refresh: boolean): Promise<McpTool[]> {
+    const late = Promise.withResolvers<never>();
+    const timer = setTimeout(() => late.reject(new Error("The server did not answer in time.")), LIST_TIMEOUT_MS);
     try {
-      const info = await client.connect();
-      const list = await client.listTools({ refresh });
+      // a server that hangs must not hold the run: its tools are left out like those of a failing one
+      const listing = (async () => [await client.connect(), await client.listTools({ refresh })] as const)();
+      const [info, list] = await Promise.race([listing, late.promise]);
       state.mcp[id] = { info, error: "" };
       return list;
     } catch (e) {
       state.mcp[id] = { info: state.mcp[id]?.info ?? null, error: errorText(e) };
       return [];
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -76,9 +82,12 @@ export function createCatalog(state: AiState, options: AiOptions, { servers, nam
     tools(refresh = false) {
       if (!toolsPromise || refresh || Object.values(state.mcp).some((s) => s.error)) {
         const builtins = [readTool(namespaces), planTool];
+        const local = (options.tools ?? []).filter((tool) => !builtins.some((b) => b.name === tool.name));
+        const taken = new Set([...builtins, ...local].map((tool) => tool.name));
         toolsPromise = mcpTools(refresh).then((list) => {
-          state.toolTitles = Object.fromEntries(list.flatMap((tool) => (tool.title ? [[tool.name, tool.title]] : [])));
-          return [...list.filter((tool) => !builtins.some((b) => b.name === tool.name)), ...builtins];
+          const offered = [...list.filter((tool) => !taken.has(tool.name)), ...local];
+          state.toolTitles = Object.fromEntries(offered.flatMap((tool) => (tool.title ? [[tool.name, tool.title]] : [])));
+          return [...offered, ...builtins];
         });
       }
       return toolsPromise;

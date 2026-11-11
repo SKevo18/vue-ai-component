@@ -8,13 +8,15 @@ import type { Approval, Entry, ImageRef, ResourceRef } from "../core/entries";
 import type { LocalNamespace, NamespaceRegistry, ReadOptions, ReadResult } from "../core/namespaces";
 import type { PlanStep } from "../core/plan";
 import type { PromptSkill } from "../core/prompt";
-import type { HarnessTool } from "../core/tools";
+import type { AttachedFile, HarnessTool } from "../core/tools";
 import type { AiErrorKind } from "../core/types";
 import type { Locale, MessageOverrides, Translate } from "../i18n";
 import type { McpClient } from "../mcp/client";
 import type { McpServerConfig, McpServerState } from "../mcp/servers";
 import type { ConversationMeta, ConversationStore } from "../stores/conversations";
 import type { AiPreferences, PreferencesStore } from "../stores/preferences";
+
+export type { AttachedFile };
 
 export type ContextItem = ResourceRef;
 
@@ -29,6 +31,11 @@ export interface AiOptions {
   /** keyed by server id; tools two servers share are offered as `<id>__<tool>` */
   mcp?: Readonly<Record<string, McpServerConfig>>;
   toolHost?: BrowserToolHost;
+  /**
+   * tools that run in this tab, offered next to the MCP tools with the same approval model (`approval` per tool). A
+   * tool named like an MCP tool replaces it; `read` and `update_plan` stay built in.
+   */
+  tools?: HarnessTool[];
   name?: string;
   /** keep it stable between runs so prompt caching works */
   instructions?: MaybeRefOrGetter<string | undefined>;
@@ -52,14 +59,6 @@ export interface AiOptions {
    */
   markdown?: (source: string) => string;
   approvalPreview?: ApprovalPreviewHook;
-}
-
-export interface AttachedFile {
-  uri: string;
-  name: string;
-  mimeType: string;
-  size: number;
-  blob: Blob;
 }
 
 export interface ResourcePreview {
@@ -120,6 +119,8 @@ export interface AiState {
   history: ConversationMeta[];
   draft: string;
   mcp: Record<string, McpServerState>;
+  /** the MCP failure text the user closed; its notice stays hidden until the failure changes */
+  dismissedTools: string;
   storageError: string;
   adding: string[];
   attachError: string;
@@ -152,6 +153,11 @@ export interface Ai {
   retry(): Promise<void>;
   stop(): void;
   decide(decision: Decision): void;
+  /**
+   * closes a notice and keeps the chat usable: no argument closes the chat's error (a tools error also hides the
+   * tools notice), `"tools"` the notice about unavailable MCP tools, `"storage"` the storage notice
+   */
+  dismissError(notice?: "tools" | "storage"): void;
   setChatAutoApprove(on: boolean): void;
   resetAllowedTools(): void;
   newChat(): Promise<void>;
