@@ -4,6 +4,8 @@ export type { Ai, AiOptions, AiState, AttachedFile, ChatError, ComposeOptions, C
 export type { AiBackend, AiConnection, AiModel, ChatTransport, ChatTransportRequest, ConnectionKind, LoginResult, LoginStart } from "./backend/types";
 export { createBrowserKeys, mergeBackends } from "./backend/browser-keys";
 export type { BrowserKeys, BrowserKeysOptions, KeyProvider } from "./backend/browser-keys";
+export { createServerBackend } from "./backend/server";
+export type { ServerBackendOptions, ServerProvider, ServerProviderId, ServerProviderStatus } from "./backend/server";
 export { createMcpClient } from "./mcp/client";
 export type { McpCallOptions, McpClient, McpClientOptions, McpListOptions, McpProgress, McpRequestOptions } from "./mcp/client";
 export type { McpServerConfig, McpServerState } from "./mcp/servers";

@@ -2474,7 +2474,7 @@ async function send(request, signal) {
 	if (res.ok) return res;
 	throw toAiError(res.status, await res.text().catch(() => ""));
 }
-var AUTH_CODES = {
+var AUTH_CODES$1 = {
 	not_connected: true,
 	oauth_expired: true,
 	invalid_key: true,
@@ -2496,7 +2496,7 @@ function toAiError(status, body) {
 		message = body.slice(0, 300);
 	}
 	message = message || `HTTP ${status}`;
-	if (status === 401 || status === 403 || code && AUTH_CODES[code]) return new AiError("auth", message, status, code);
+	if (status === 401 || status === 403 || code && AUTH_CODES$1[code]) return new AiError("auth", message, status, code);
 	if (status === 429) return new AiError("rate_limit", message, status, code);
 	if (status === 400 && /api key|unauthenticated|credential/i.test(message)) return new AiError("auth", message, status, code);
 	if (status >= 500) return new AiError("server", message, status, code);
@@ -4097,6 +4097,231 @@ function mergeBackends(...backends) {
 		await Promise.all(browserBackends.map((b) => b.clearBrowserKeys()));
 	};
 	return merged;
+}
+// src/backend/server.ts
+var DEFAULTS = {
+	chatgpt: {
+		name: "ChatGPT",
+		dialect: "responses",
+		login: "paste",
+		hint: "The page after the sign-in does not load. Copy its address and paste it here."
+	},
+	codex: {
+		name: "ChatGPT (Codex)",
+		dialect: "responses",
+		login: "device",
+		wire: { reasoning: true }
+	},
+	claude: {
+		name: "Claude",
+		dialect: "messages",
+		login: "paste"
+	},
+	antigravity: {
+		name: "Google",
+		dialect: "generate",
+		login: "paste"
+	},
+	openai: {
+		name: "OpenAI",
+		dialect: "responses",
+		keysUrl: "https://platform.openai.com/api-keys",
+		usageUrl: "https://platform.openai.com/usage"
+	},
+	anthropic: {
+		name: "Anthropic",
+		dialect: "messages",
+		keysUrl: "https://console.anthropic.com/settings/keys",
+		usageUrl: "https://console.anthropic.com/settings/usage"
+	},
+	gemini: {
+		name: "Gemini",
+		dialect: "generate",
+		keysUrl: "https://aistudio.google.com/apikey",
+		usageUrl: "https://aistudio.google.com/usage"
+	}
+};
+var ORDER = Object.keys(DEFAULTS);
+/** server codes that mean the browser must sign in again */
+var AUTH_CODES = /^(not_connected|oauth_expired|oauth_key_(missing|mismatch|invalid)|unauthorized)$/;
+/** the code and message of a server error: `{error: {code, message}}` or `{error: code, message}` */
+function serverError(body) {
+	let parsed;
+	try {
+		parsed = JSON.parse(body);
+	} catch {
+		return null;
+	}
+	if (!parsed || typeof parsed !== "object" || !("error" in parsed)) return null;
+	const { error } = parsed;
+	if (typeof error === "string") return {
+		code: error,
+		message: "message" in parsed && typeof parsed.message === "string" ? parsed.message : error,
+		flat: true
+	};
+	if (error && typeof error === "object" && "code" in error && typeof error.code === "string") {
+		const message = "message" in error && typeof error.message === "string" ? error.message : error.code;
+		return {
+			code: error.code,
+			message,
+			flat: false
+		};
+	}
+	return null;
+}
+/**
+* The backend of a server running the aiserver handler: subscription sign-ins and server-stored API keys with the
+* server's chat proxy. Merge it with createBrowserKeys to offer browser-held keys next to the sign-ins.
+*/
+function createServerBackend(options) {
+	const base = options.baseUrl.replace(/\/+$/, "");
+	const doFetch = options.fetch ?? ((input, init) => fetch(input, init));
+	const listed = (options.providers ?? ORDER).map((p) => typeof p === "string" ? { id: p } : p);
+	const overrides = new Map(listed.map(({ id, ...rest }) => [id, rest]));
+	const logins = /* @__PURE__ */ new Map();
+	const statuses = /* @__PURE__ */ new Map();
+	function headers(extra = {}) {
+		const h = new Headers(typeof options.headers === "function" ? options.headers() : options.headers);
+		for (const [k, v] of Object.entries(extra)) h.set(k, v);
+		return h;
+	}
+	function message(code, fallback) {
+		return options.message?.(code, fallback) ?? fallback;
+	}
+	async function call(method, path, body, signal) {
+		let res;
+		try {
+			res = await doFetch(base + path, {
+				method,
+				credentials: "same-origin",
+				headers: headers(method === "GET" ? {} : { "Content-Type": "application/json" }),
+				body: body === void 0 ? void 0 : JSON.stringify(body),
+				signal
+			});
+		} catch (e) {
+			if (e?.name === "AbortError" || signal?.aborted) throw new AiError("aborted", "aborted");
+			throw new AiError("network", e?.message || "network error");
+		}
+		const text = await res.text();
+		if (!res.ok) {
+			const e = serverError(text);
+			if (!e) throw toAiError(res.status, text);
+			throw new AiError(res.status === 401 || res.status === 403 || AUTH_CODES.test(e.code) ? "auth" : res.status >= 500 ? "server" : "bad_request", message(e.code, e.message), res.status, e.code);
+		}
+		return {
+			status: res.status,
+			data: text ? JSON.parse(text) : null
+		};
+	}
+	/** the path segment of a provider of the given kind, listing the connections first when they are unknown */
+	async function provider(id, kind) {
+		if (!statuses.size) await backend.connections();
+		const st = statuses.get(id);
+		if (!st || kind && st.kind !== kind) throw new AiError("bad_request", `Unknown connection ${id}`);
+		return encodeURIComponent(id);
+	}
+	/** a chat error of the server itself gets the vendor shape the harness reads, and sign-in errors become 401 */
+	async function chatError(res) {
+		if (res.ok) return res;
+		const text = await res.text();
+		const e = serverError(text);
+		if (!e || !(e.flat || AUTH_CODES.test(e.code) || e.code.startsWith("oauth_"))) return new Response(text, {
+			status: res.status,
+			headers: res.headers
+		});
+		const status = AUTH_CODES.test(e.code) ? 401 : res.status;
+		return new Response(JSON.stringify({ error: {
+			code: e.code,
+			message: message(e.code, e.message)
+		} }), {
+			status,
+			headers: { "Content-Type": "application/json" }
+		});
+	}
+	const backend = {
+		async connections() {
+			const { data } = await call("GET", "/status");
+			const ids = options.providers ? listed.map((p) => p.id) : [...ORDER.filter((id) => data.providers[id]?.kind === "oauth"), ...ORDER.filter((id) => data.providers[id]?.kind === "key")];
+			statuses.clear();
+			const out = [];
+			for (const id of ids) {
+				const st = data.providers[id];
+				if (!st) continue;
+				statuses.set(id, st);
+				const { hint: _hint, ...defaults } = DEFAULTS[id];
+				const { hint: _override, ...over } = overrides.get(id) ?? {};
+				const here = st.connected && st.key_match !== false;
+				const c = {
+					...defaults,
+					...over,
+					id,
+					kind: st.kind === "oauth" ? "subscription" : "key",
+					connected: here,
+					account: here ? st.email || st.account_id || void 0 : void 0,
+					enabled: st.enabled
+				};
+				out.push(options.connection ? options.connection(c, st) : c);
+			}
+			return out;
+		},
+		async startLogin(id) {
+			const { data } = await call("POST", `/oauth/${await provider(id, "oauth")}/start`);
+			logins.set(id, data.login_id);
+			if (data.flow === "device") return {
+				kind: "device",
+				url: data.verification_url ?? "",
+				code: data.user_code ?? "",
+				interval: data.interval ?? 5,
+				expiresIn: data.expires_in
+			};
+			return {
+				kind: "paste",
+				url: data.authorize_url ?? "",
+				hint: overrides.get(id)?.hint ?? DEFAULTS[id].hint,
+				expiresIn: data.expires_in
+			};
+		},
+		async completeLogin(id, pasted) {
+			const p = await provider(id, "oauth");
+			const loginId = logins.get(id);
+			if (!loginId) throw new AiError("bad_request", message("oauth_login", "The sign-in attempt is unknown or expired. Start again."), 400, "oauth_login");
+			const { status } = await call("POST", `/oauth/${p}/complete`, {
+				login_id: loginId,
+				code: (pasted ?? "").trim()
+			});
+			if (status === 202) return "pending";
+			logins.delete(id);
+			return "connected";
+		},
+		async logout(id) {
+			await call("DELETE", `/oauth/${await provider(id, "oauth")}`);
+		},
+		async saveKey(id, key) {
+			const p = await provider(id, "key");
+			if (key === null) await call("DELETE", `/keys/${p}`);
+			else await call("PUT", `/keys/${p}`, { api_key: key });
+		},
+		async models(id, signal) {
+			const { data } = await call("GET", `/${await provider(id)}/models`, void 0, signal);
+			return data.models ?? [];
+		},
+		/** the caller sends through core/sse send, which turns a failed response into an AiError */
+		transport(id) {
+			return async ({ body }, signal) => {
+				return chatError(await doFetch(`${base}/${await provider(id)}/chat`, {
+					method: "POST",
+					credentials: "same-origin",
+					headers: headers({
+						"Content-Type": "application/json",
+						Accept: "text/event-stream"
+					}),
+					body: JSON.stringify(body),
+					signal
+				}));
+			};
+		}
+	};
+	return backend;
 }
 // src/browser/tool-host.ts
 function toResult(value) {
@@ -7483,11 +7708,8 @@ var _hoisted_12 = {
 };
 var _hoisted_13 = { class: "ai-settings-hint" };
 var _hoisted_14 = { class: "ai-cards" };
-var _hoisted_15 = {
-	key: 4,
-	class: "ai-settings-section"
-};
-var _hoisted_16 = { class: "ai-settings-hint" };
+var _hoisted_15 = ["open"];
+var _hoisted_16 = ["title"];
 var _hoisted_17 = {
 	key: 0,
 	class: "ai-cards"
@@ -7558,6 +7780,10 @@ var AiSettings_default = /* @__PURE__ */ defineComponent({
 		const confirmingClear = ref(false);
 		const clearing = ref(false);
 		const clearError = ref("");
+		const keysOpen = ref(false);
+		watch(() => state.connectionsLoaded && !subscriptions.value.length, (open) => {
+			if (open) keysOpen.value = true;
+		}, { immediate: true });
 		async function clearBrowserKeys() {
 			if (!ai.options.backend.clearBrowserKeys || clearing.value) return;
 			clearing.value = true;
@@ -7594,7 +7820,7 @@ var AiSettings_default = /* @__PURE__ */ defineComponent({
 		return (_ctx, _cache) => {
 			return openBlock(), createElementBlock("div", _hoisted_1, [
 				renderSlot(_ctx.$slots, "before"),
-				!unref(state).connectionsLoaded ? (openBlock(), createElementBlock("div", _hoisted_2, [..._cache[5] || (_cache[5] = [createElementVNode("span", { class: "ai-spinner" }, null, -1)])])) : (openBlock(), createElementBlock(Fragment, { key: 1 }, [
+				!unref(state).connectionsLoaded ? (openBlock(), createElementBlock("div", _hoisted_2, [..._cache[6] || (_cache[6] = [createElementVNode("span", { class: "ai-spinner" }, null, -1)])])) : (openBlock(), createElementBlock(Fragment, { key: 1 }, [
 					unref(state).connectionsError ? (openBlock(), createElementBlock("p", _hoisted_3, toDisplayString(unref(state).connectionsError), 1)) : !visible.value.length ? (openBlock(), createElementBlock("p", _hoisted_4, toDisplayString(unref(t)("connections.noConnections")), 1)) : createCommentVNode("", true),
 					sites.value.length ? (openBlock(), createElementBlock("section", _hoisted_5, [createElementVNode("h3", null, toDisplayString(unref(t)("connections.site")), 1), createElementVNode("div", _hoisted_6, [(openBlock(true), createElementBlock(Fragment, null, renderList(sites.value, (c) => {
 						return openBlock(), createElementBlock("div", {
@@ -7617,9 +7843,17 @@ var AiSettings_default = /* @__PURE__ */ defineComponent({
 							}, null, 8, ["connection", "ai"]);
 						}), 128))])
 					])) : createCommentVNode("", true),
-					keys.value.length || unref(ai).options.backend.clearBrowserKeys ? (openBlock(), createElementBlock("section", _hoisted_15, [
-						createElementVNode("h3", null, toDisplayString(unref(t)("connections.keys")), 1),
-						createElementVNode("p", _hoisted_16, toDisplayString(unref(t)("connections.keysHint")), 1),
+					keys.value.length || unref(ai).options.backend.clearBrowserKeys ? (openBlock(), createElementBlock("details", {
+						key: 4,
+						class: "ai-settings-section ai-settings-keys",
+						open: keysOpen.value,
+						onToggle: _cache[2] || (_cache[2] = ($event) => keysOpen.value = $event.target.open)
+					}, [
+						createElementVNode("summary", { title: unref(t)("connections.keysHint") }, [createVNode(unref(ChevronRight), {
+							class: "ai-settings-chevron",
+							size: 14,
+							"aria-hidden": "true"
+						}), createElementVNode("h3", null, toDisplayString(unref(t)("connections.keys")), 1)], 8, _hoisted_16),
 						keys.value.length ? (openBlock(), createElementBlock("div", _hoisted_17, [(openBlock(true), createElementBlock(Fragment, null, renderList(keys.value, (c) => {
 							return openBlock(), createBlock(AiKeyCard_default, {
 								key: c.id,
@@ -7643,7 +7877,7 @@ var AiSettings_default = /* @__PURE__ */ defineComponent({
 							class: "ai-btn ai-ghost ai-sm ai-danger",
 							onClick: _cache[1] || (_cache[1] = ($event) => confirmingClear.value = true)
 						}, toDisplayString(unref(t)("connections.clearBrowserKeys")), 1)), clearError.value ? (openBlock(), createElementBlock("p", _hoisted_24, toDisplayString(clearError.value), 1)) : createCommentVNode("", true)])) : createCommentVNode("", true)
-					])) : createCommentVNode("", true),
+					], 40, _hoisted_15)) : createCommentVNode("", true),
 					usable.value.length ? (openBlock(), createElementBlock("section", _hoisted_25, [
 						createElementVNode("h3", null, toDisplayString(unref(t)("connections.assistant")), 1),
 						createElementVNode("div", _hoisted_26, [createElementVNode("span", _hoisted_27, toDisplayString(unref(t)("connections.provider")), 1), createElementVNode("div", {
@@ -7680,7 +7914,7 @@ var AiSettings_default = /* @__PURE__ */ defineComponent({
 								class: "ai-model-row",
 								onSubmit: withModifiers(useCustom, ["prevent"])
 							}, [withDirectives(createElementVNode("input", {
-								"onUpdate:modelValue": _cache[2] || (_cache[2] = ($event) => customModel.value = $event),
+								"onUpdate:modelValue": _cache[3] || (_cache[3] = ($event) => customModel.value = $event),
 								class: "ai-input",
 								placeholder: unref(t)("model.customPlaceholder"),
 								"aria-label": unref(t)("model.customPlaceholder")
@@ -7693,11 +7927,11 @@ var AiSettings_default = /* @__PURE__ */ defineComponent({
 						])) : createCommentVNode("", true),
 						createElementVNode("div", _hoisted_40, [createVNode(AiSwitch_default, {
 							modelValue: autoWrites.value,
-							"onUpdate:modelValue": _cache[3] || (_cache[3] = ($event) => autoWrites.value = $event),
+							"onUpdate:modelValue": _cache[4] || (_cache[4] = ($event) => autoWrites.value = $event),
 							label: unref(t)("connections.autoWrites")
 						}, null, 8, ["modelValue", "label"]), createVNode(AiSwitch_default, {
 							modelValue: autoExternal.value,
-							"onUpdate:modelValue": _cache[4] || (_cache[4] = ($event) => autoExternal.value = $event),
+							"onUpdate:modelValue": _cache[5] || (_cache[5] = ($event) => autoExternal.value = $event),
 							label: unref(t)("connections.autoExternal")
 						}, null, 8, ["modelValue", "label"])])
 					])) : createCommentVNode("", true)
@@ -7707,4 +7941,4 @@ var AiSettings_default = /* @__PURE__ */ defineComponent({
 		};
 	}
 });
-export { AI_KEY, AiChatLog_default as AiChatLog, AiComposer_default as AiComposer, AiError, AiHistory_default as AiHistory, AiMarkdown_default as AiMarkdown, AiModelSwitch_default as AiModelSwitch, AiResourcePreview_default as AiResourcePreview, AiSettings_default as AiSettings, AiSidebar_default as AiSidebar, DEFAULT_PREFERENCES, MCP_PROTOCOL_VERSION, McpError, createAi, createBrowserKeys, createBrowserToolHost, createLocalConversationStore, createLocalPreferencesStore, createMcpClient, en, mergeBackends, renderMarkdown, resourceLinks, sanitizeHtml, sk, useAi };
+export { AI_KEY, AiChatLog_default as AiChatLog, AiComposer_default as AiComposer, AiError, AiHistory_default as AiHistory, AiMarkdown_default as AiMarkdown, AiModelSwitch_default as AiModelSwitch, AiResourcePreview_default as AiResourcePreview, AiSettings_default as AiSettings, AiSidebar_default as AiSidebar, DEFAULT_PREFERENCES, MCP_PROTOCOL_VERSION, McpError, createAi, createBrowserKeys, createBrowserToolHost, createLocalConversationStore, createLocalPreferencesStore, createMcpClient, createServerBackend, en, mergeBackends, renderMarkdown, resourceLinks, sanitizeHtml, sk, useAi };

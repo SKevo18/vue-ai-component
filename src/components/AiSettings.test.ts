@@ -143,4 +143,17 @@ describe("AiSettings", () => {
     expect(wrapper.find(".ai-browser-keys-clear").exists()).toBe(false);
     wrapper.unmount();
   });
+
+  it("offers sign-ins first and keeps API keys collapsed unless there is no sign-in", async () => {
+    const backend = (connections: AiConnection[]): AiBackend => ({ connections: async () => connections, models: async () => [], transport: () => async () => new Response(""), saveKey: async () => undefined });
+    const both = mount(AiSettings, { props: { ai: settings(backend([connection({ id: "openai", name: "OpenAI" }), connection({ id: "otter-plan", kind: "subscription", login: "paste", name: "Otter plan" })])) } });
+    await flushPromises();
+    expect(both.findAll(".ai-settings-section > h3, .ai-settings-section summary h3").map((h) => h.text())).toEqual(["Subscriptions", "API keys"]);
+    expect(both.get<HTMLDetailsElement>("details.ai-settings-keys").element.open).toBe(false);
+    both.unmount();
+    const keysOnly = mount(AiSettings, { props: { ai: settings(backend([connection({ id: "openai", name: "OpenAI" })])) } });
+    await flushPromises();
+    expect(keysOnly.get<HTMLDetailsElement>("details.ai-settings-keys").element.open).toBe(true);
+    keysOnly.unmount();
+  });
 });

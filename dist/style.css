@@ -1605,6 +1605,30 @@ button.ai-chip {
   font-size: 14px;
   font-weight: 650;
 }
+.ai-settings-keys > summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+.ai-settings-keys > summary::-webkit-details-marker {
+  display: none;
+}
+.ai-settings-keys > summary h3 {
+  margin: 0;
+}
+.ai-settings-keys:not([open]) > summary {
+  margin-bottom: 0;
+}
+.ai-settings-chevron {
+  color: var(--vc-fg-muted);
+  transition: transform 0.15s;
+}
+.ai-settings-keys[open] .ai-settings-chevron {
+  transform: rotate(90deg);
+}
 .ai-settings-hint {
   margin: 0 0 8px;
   color: var(--vc-fg-muted);

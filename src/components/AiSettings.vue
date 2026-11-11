@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ChevronRight } from "@lucide/vue";
 import { computed, onMounted, ref, watch } from "vue";
 import type { Ai } from "../ai";
 import { errorText } from "../core/types";
@@ -22,6 +23,15 @@ const customModel = ref("");
 const confirmingClear = ref(false);
 const clearing = ref(false);
 const clearError = ref("");
+// API keys are the secondary option: collapsed unless there is no sign-in to offer
+const keysOpen = ref(false);
+watch(
+  () => state.connectionsLoaded && !subscriptions.value.length,
+  (open) => {
+    if (open) keysOpen.value = true;
+  },
+  { immediate: true },
+);
 
 async function clearBrowserKeys() {
   if (!ai.options.backend.clearBrowserKeys || clearing.value) return;
@@ -92,9 +102,11 @@ onMounted(() => void ai.init().then(() => ai.refreshConnections()));
         </div>
       </section>
 
-      <section v-if="keys.length || ai.options.backend.clearBrowserKeys" class="ai-settings-section">
-        <h3>{{ t("connections.keys") }}</h3>
-        <p class="ai-settings-hint">{{ t("connections.keysHint") }}</p>
+      <details v-if="keys.length || ai.options.backend.clearBrowserKeys" class="ai-settings-section ai-settings-keys" :open="keysOpen" @toggle="keysOpen = ($event.target as HTMLDetailsElement).open">
+        <summary :title="t('connections.keysHint')">
+          <ChevronRight class="ai-settings-chevron" :size="14" aria-hidden="true" />
+          <h3>{{ t("connections.keys") }}</h3>
+        </summary>
         <div v-if="keys.length" class="ai-cards">
           <AiKeyCard v-for="c in keys" :key="c.id" :connection="c" :ai="ai" />
         </div>
@@ -111,7 +123,7 @@ onMounted(() => void ai.init().then(() => ai.refreshConnections()));
           <button v-else type="button" class="ai-btn ai-ghost ai-sm ai-danger" @click="confirmingClear = true">{{ t("connections.clearBrowserKeys") }}</button>
           <p v-if="clearError" class="ai-card-error" role="alert">{{ clearError }}</p>
         </div>
-      </section>
+      </details>
 
       <section v-if="usable.length" class="ai-settings-section">
         <h3>{{ t("connections.assistant") }}</h3>
@@ -163,6 +175,30 @@ onMounted(() => void ai.init().then(() => ai.refreshConnections()));
   color: var(--vc-fg-strong);
   font-size: 14px;
   font-weight: 650;
+}
+.ai-settings-keys > summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+.ai-settings-keys > summary::-webkit-details-marker {
+  display: none;
+}
+.ai-settings-keys > summary h3 {
+  margin: 0;
+}
+.ai-settings-keys:not([open]) > summary {
+  margin-bottom: 0;
+}
+.ai-settings-chevron {
+  color: var(--vc-fg-muted);
+  transition: transform 0.15s;
+}
+.ai-settings-keys[open] .ai-settings-chevron {
+  transform: rotate(90deg);
 }
 .ai-settings-hint {
   margin: 0 0 8px;
