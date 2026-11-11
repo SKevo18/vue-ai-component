@@ -2,15 +2,25 @@ import { schemeOf } from "../core/namespaces";
 import { createMcpClient, type McpClient, type McpClientOptions, type McpRequestOptions } from "./client";
 import type { McpResourceContents, McpServerInfo } from "./types";
 
-export type McpServerConfig = McpClient | McpClientOptions;
+/** `name` is what notices call the server, by default its id */
+export type McpServerConfig = (McpClient | McpClientOptions) & { name?: string };
 
 export interface McpServerState {
+  name: string;
   info: McpServerInfo | null;
+  error: string;
+}
+
+export interface McpServerFailure {
+  id: string;
+  name: string;
+  /** the raw error, for a tooltip */
   error: string;
 }
 
 export interface McpServers {
   readonly clients: Readonly<Record<string, McpClient>>;
+  readonly names: Readonly<Record<string, string>>;
   readResource(uri: string, options?: McpRequestOptions): Promise<McpResourceContents[]>;
 }
 
@@ -28,8 +38,10 @@ function sameOrigin(url: string): boolean {
 // the tab header goes only to same-origin servers: other origins would need it allowed in their CORS preflight
 export function createMcpServers(config: Readonly<Record<string, McpServerConfig>> | undefined, tabHeaders?: () => Record<string, string>): McpServers {
   const clients: Record<string, McpClient> = {};
+  const names: Record<string, string> = {};
   for (const [id, entry] of Object.entries(config ?? {})) {
     if (!SERVER_ID.test(id)) throw new Error(`MCP server id "${id}" must be 1-32 letters, digits, "_" or "-".`);
+    names[id] = entry.name?.trim() || id;
     clients[id] = "callTool" in entry
       ? entry
       : createMcpClient({
@@ -52,6 +64,7 @@ export function createMcpServers(config: Readonly<Record<string, McpServerConfig
 
   return {
     clients,
+    names,
     async readResource(uri, options) {
       if (!list.length) throw new Error(`No namespace serves ${uri}.`);
       if (list.length === 1) return list[0]!.readResource(uri, options);
@@ -72,8 +85,11 @@ export function createMcpServers(config: Readonly<Record<string, McpServerConfig
   };
 }
 
-export function serverErrors(servers: Readonly<Record<string, McpServerState>>): string {
-  const failed = Object.entries(servers).filter(([, s]) => s.error);
-  if (Object.keys(servers).length === 1) return failed[0]?.[1].error ?? "";
-  return failed.map(([id, s]) => `${id}: ${s.error}`).join("; ");
+export function failedServers(servers: Readonly<Record<string, McpServerState>>): McpServerFailure[] {
+  return Object.entries(servers).flatMap(([id, s]) => (s.error ? [{ id, name: s.name, error: s.error }] : []));
+}
+
+/** identifies a set of failures, so a closed notice stays closed until they change */
+export function failuresKey(failures: readonly McpServerFailure[]): string {
+  return JSON.stringify(failures.map((f) => [f.id, f.error]));
 }

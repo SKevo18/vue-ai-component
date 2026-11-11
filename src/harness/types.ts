@@ -12,7 +12,7 @@ import type { AttachedFile, HarnessTool } from "../core/tools";
 import type { AiErrorKind } from "../core/types";
 import type { Locale, MessageOverrides, Translate } from "../i18n";
 import type { McpClient } from "../mcp/client";
-import type { McpServerConfig, McpServerState } from "../mcp/servers";
+import type { McpServerConfig, McpServerFailure, McpServerState } from "../mcp/servers";
 import type { ConversationMeta, ConversationStore } from "../stores/conversations";
 import type { AiPreferences, PreferencesStore } from "../stores/preferences";
 
@@ -28,7 +28,10 @@ export interface Suggestion {
 
 export interface AiOptions {
   backend: AiBackend;
-  /** keyed by server id; tools two servers share are offered as `<id>__<tool>` */
+  /**
+   * keyed by server id; tools two servers share are offered as `<id>__<tool>`. An entry's `name` is what notices
+   * call the server, by default its id.
+   */
   mcp?: Readonly<Record<string, McpServerConfig>>;
   toolHost?: BrowserToolHost;
   /**
@@ -86,6 +89,8 @@ export interface ModelList {
 export interface ChatError {
   kind: AiErrorKind | "tools";
   message: string;
+  /** with kind `tools`, the servers whose tools are left out */
+  failures?: McpServerFailure[];
 }
 
 export interface ComposeOptions {
@@ -119,7 +124,7 @@ export interface AiState {
   history: ConversationMeta[];
   draft: string;
   mcp: Record<string, McpServerState>;
-  /** the MCP failure text the user closed; its notice stays hidden until the failure changes */
+  /** identifies the MCP failures the user closed; their notice stays hidden until they change */
   dismissedTools: string;
   storageError: string;
   adding: string[];

@@ -15,7 +15,7 @@ import { conversationExport } from "./harness/export";
 import { createPersistence } from "./harness/persistence";
 import type { Ai, AiOptions, AiState, ChatError, ComposeOptions, Decision } from "./harness/types";
 import { createTranslator } from "./i18n";
-import { createMcpServers, serverErrors } from "./mcp/servers";
+import { createMcpServers, failedServers, failuresKey } from "./mcp/servers";
 import { connectionChat } from "./providers";
 import { createLocalConversationStore, type StoredConversation } from "./stores/conversations";
 import { createLocalPreferencesStore, DEFAULT_PREFERENCES, type AiPreferences } from "./stores/preferences";
@@ -69,7 +69,7 @@ export function createAi(options: AiOptions): Ai & { install(app: App): void } {
     approval: null,
     history: [],
     draft: "",
-    mcp: Object.fromEntries(Object.keys(servers.clients).map((id) => [id, { info: null, error: "" }])),
+    mcp: Object.fromEntries(Object.entries(servers.names).map(([id, name]) => [id, { name, info: null, error: "" }])),
     dismissedTools: "",
     storageError: "",
     adding: [],
@@ -166,8 +166,10 @@ export function createAi(options: AiOptions): Ai & { install(app: App): void } {
     const conversationId = state.conversationId;
     const work = async () => {
       const list = await catalog.tools();
-      const mcpError = serverErrors(state.mcp);
-      if (mcpError && mcpError !== state.dismissedTools) state.error = { kind: "tools", message: t("errors.tools", { message: mcpError }) };
+      const failures = failedServers(state.mcp);
+      if (failures.length && failuresKey(failures) !== state.dismissedTools) {
+        state.error = { kind: "tools", message: failures.map((f) => t("errors.tools", { name: f.name })).join(" "), failures };
+      }
       await runAgent({
         chat: connectionChat(target.connection, options.backend.transport(target.connection.id)),
         model: target.model,
@@ -340,7 +342,7 @@ export function createAi(options: AiOptions): Ai & { install(app: App): void } {
         state.storageError = "";
         return;
       }
-      if (notice === "tools" || state.error?.kind === "tools") state.dismissedTools = serverErrors(state.mcp);
+      if (notice === "tools" || state.error?.kind === "tools") state.dismissedTools = failuresKey(failedServers(state.mcp));
       if (!notice) state.error = null;
     },
     setChatAutoApprove(on: boolean) {

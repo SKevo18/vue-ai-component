@@ -1,7 +1,7 @@
 // @vitest-environment node
 import "fake-indexeddb/auto";
 import { describe, expect, it, vi } from "vitest";
-import { watch } from "vue";
+import { toRaw, watch } from "vue";
 import type { HarnessTool } from "../src/core/tools";
 import { componentAi } from "./component-ai";
 import { scriptedTransport, toolOutputs, type ResponsesInputItem } from "./fake-provider";
@@ -49,14 +49,19 @@ describe("local tools", () => {
   });
 
   it("keeps the chat running without an unreachable MCP server and lets the user close its notice", async () => {
-    const ai = componentAi({ tools: [countTool("auto")], mcp: { plugh: { url: "http://127.0.0.1:9/mcp" } }, storagePrefix: "local-mcp:" }, { transport: () => callOnce("count_files", {}) });
+    const ai = componentAi({ tools: [countTool("auto")], mcp: { plugh: { url: "http://127.0.0.1:9/mcp", name: "Plugh docs" } }, storagePrefix: "local-mcp:" }, { transport: () => callOnce("count_files", {}) });
     await ai.init();
+    expect(ai.state.mcp.plugh).toMatchObject({ name: "Plugh docs", error: "" });
+    const errors: unknown[] = [];
+    const watching = watch(() => ai.state.error, (error) => error && errors.push(structuredClone(toRaw(error))), { flush: "sync" });
     await ai.send("count");
+    watching();
     expect(ai.state.entries.at(-1)).toMatchObject({ role: "assistant", content: "answer: none" });
     expect(ai.state.mcp.plugh!.error).toContain("Cannot reach the MCP server");
+    expect(errors).toEqual([{ kind: "tools", message: "Tools from Plugh docs are unavailable.", failures: [{ id: "plugh", name: "Plugh docs", error: ai.state.mcp.plugh!.error }] }]);
     expect(ai.state.error).toBeNull();
     ai.dismissError("tools");
-    expect(ai.state.dismissedTools).toBe(ai.state.mcp.plugh!.error);
+    expect(ai.state.dismissedTools).not.toBe("");
 
     const seen: (string | undefined)[] = [];
     const stop = watch(() => ai.state.error?.kind, (kind) => seen.push(kind), { flush: "sync" });
@@ -67,12 +72,12 @@ describe("local tools", () => {
 
   it("closes the chat's error and the storage notice", async () => {
     const ai = componentAi({ storagePrefix: "local-dismiss:" });
-    ai.state.error = { kind: "tools", message: "The app's tools are unavailable: zorp" };
-    ai.state.mcp.zorp = { info: null, error: "zorp" };
+    ai.state.mcp.zorp = { name: "Zorp", info: null, error: "zorp" };
+    ai.state.error = { kind: "tools", message: "Tools from Zorp are unavailable.", failures: [{ id: "zorp", name: "Zorp", error: "zorp" }] };
     ai.state.storageError = "disk full";
     ai.dismissError();
     expect(ai.state.error).toBeNull();
-    expect(ai.state.dismissedTools).toBe("zorp");
+    expect(ai.state.dismissedTools).not.toBe("");
     expect(ai.state.storageError).toBe("disk full");
     ai.dismissError("storage");
     expect(ai.state.storageError).toBe("");

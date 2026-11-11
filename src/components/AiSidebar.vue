@@ -2,7 +2,7 @@
 import { ArrowLeft, History, Settings, SquarePen, X } from "@lucide/vue";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { Ai } from "../ai";
-import { serverErrors } from "../mcp/servers";
+import { failedServers, failuresKey } from "../mcp/servers";
 import { useAiInstance, useMediaQuery, useScrollLock, useVisualViewport } from "../ui/composables";
 import { vTooltip } from "../ui/tooltip";
 import AiChatLog from "./AiChatLog.vue";
@@ -37,7 +37,8 @@ useScrollLock(sheet);
 
 const style = computed(() => (sheet.value && viewport.height ? { top: `${viewport.top}px`, height: `${viewport.height}px`, "--ai-vh": `${viewport.height}px` } : undefined));
 const heading = computed(() => (historyOpen.value ? t("history") : props.title || state.title || t("title")));
-const mcpError = computed(() => serverErrors(state.mcp));
+const failures = computed(() => failedServers(state.mcp));
+const toolsNotice = computed(() => failures.value.length > 0 && failuresKey(failures.value) !== state.dismissedTools);
 
 function reportWidth() {
   const px = open.value && docked.value && root.value ? Math.round(root.value.getBoundingClientRect().width) : 0;
@@ -133,8 +134,8 @@ function close() {
         <button v-tooltip="t('close')" type="button" class="ai-icon-btn" @click="close"><X /></button>
       </div>
     </header>
-    <div v-if="state.approval === null && mcpError && mcpError !== state.dismissedTools && !state.running && state.error?.kind !== 'tools'" class="ai-notice">
-      <span class="ai-notice-text">{{ t("errors.tools", { message: mcpError }) }}</span>
+    <div v-if="state.approval === null && toolsNotice && !state.running && state.error?.kind !== 'tools'" class="ai-notice">
+      <span class="ai-notice-text"><span v-for="f in failures" :key="f.id" v-tooltip="f.error" class="ai-failure" tabindex="0">{{ t("errors.tools", { name: f.name }) }}</span></span>
       <button v-tooltip="t('dismiss')" type="button" class="ai-icon-btn ai-sm" @click="ai.dismissError('tools')"><X /></button>
     </div>
     <div v-if="state.storageError" class="ai-notice" role="alert">

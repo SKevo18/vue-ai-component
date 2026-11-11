@@ -40,10 +40,10 @@ export function createCatalog(state: AiState, options: AiOptions, { servers, nam
       // a server that hangs must not hold the run: its tools are left out like those of a failing one
       const listing = (async () => [await client.connect(), await client.listTools({ refresh })] as const)();
       const [info, list] = await Promise.race([listing, late.promise]);
-      state.mcp[id] = { info, error: "" };
+      state.mcp[id] = { name: servers.names[id] ?? id, info, error: "" };
       return list;
     } catch (e) {
-      state.mcp[id] = { info: state.mcp[id]?.info ?? null, error: errorText(e) };
+      state.mcp[id] = { name: servers.names[id] ?? id, info: state.mcp[id]?.info ?? null, error: errorText(e) };
       return [];
     } finally {
       clearTimeout(timer);
@@ -118,7 +118,7 @@ export function createCatalog(state: AiState, options: AiOptions, { servers, nam
         Promise.allSettled(
           entries.map(async ([id, client]) => {
             const info = await client.connect();
-            state.mcp[id] = { info, error: state.mcp[id]?.error ?? "" };
+            state.mcp[id] = { name: servers.names[id] ?? id, info, error: state.mcp[id]?.error ?? "" };
             return info.capabilities.resources ? client.listResources() : [];
           }),
         ).then((settled) => {

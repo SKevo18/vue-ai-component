@@ -129,7 +129,8 @@ defineExpose({ scrollToEnd: () => scrollToEnd(true) });
     </div>
     <div v-if="state.error" class="ai-error" role="alert">
       <AlertCircle class="ai-error-icon" />
-      <span class="ai-error-text"><strong v-if="errorHeadline" class="ai-error-headline">{{ errorHeadline }}</strong> {{ state.error.message }}</span>
+      <span v-if="state.error.failures?.length" class="ai-error-text"><span v-for="f in state.error.failures" :key="f.id" v-tooltip="f.error" class="ai-failure" tabindex="0">{{ t("errors.tools", { name: f.name }) }}</span></span>
+      <span v-else class="ai-error-text"><strong v-if="errorHeadline" class="ai-error-headline">{{ errorHeadline }}</strong> {{ state.error.message }}</span>
       <button v-if="state.error.kind === 'auth' && ai.options.openSettings" v-tooltip="t('settings')" type="button" class="ai-icon-btn ai-sm" @click="ai.options.openSettings()"><Settings /></button>
       <button v-if="!state.running && state.error.kind !== 'tools' && state.entries.length" v-tooltip="t('retry')" type="button" class="ai-icon-btn ai-sm" @click="ai.retry()"><RotateCcw /></button>
       <button v-tooltip="t('dismiss')" type="button" class="ai-icon-btn ai-sm" @click="ai.dismissError()"><X /></button>

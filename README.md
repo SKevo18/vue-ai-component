@@ -15,11 +15,11 @@ import { createApp, h } from "vue";
 import { AiSidebar, createAi, createBrowserKeys } from "@skevo18/vue-ai-component";
 import "@skevo18/vue-ai-component/style.css";
 
-const ai = createAi({ backend: createBrowserKeys(), mcp: { app: { url: "/api/mcp" }, docs: { url: "https://docs.example.com/mcp", credentials: "omit" } } });
+const ai = createAi({ backend: createBrowserKeys(), mcp: { app: { url: "/api/mcp" }, docs: { url: "https://docs.example.com/mcp", credentials: "omit", name: "Docs" } } });
 createApp({ render: () => h(AiSidebar) }).use(ai).mount("#app");
 ```
 
-Tools that run in the tab go in `tools` next to the MCP servers, with the same approval tiers (`approval: "auto" | "ask" | "confirm"`). Their `run(args, ctx)` gets the chat's attachments with their bytes from `ctx.files()`. A failing or silent MCP server never blocks a run: its tools are left out and the notice about it can be closed (`ai.dismissError("tools")`).
+Tools that run in the tab go in `tools` next to the MCP servers, with the same approval tiers (`approval: "auto" | "ask" | "confirm"`). Their `run(args, ctx)` gets the chat's attachments with their bytes from `ctx.files()`. A failing or silent MCP server never blocks a run: its tools are left out and a notice names the server by its `name` (default its id), with the raw error in a tooltip. The notice can be closed (`ai.dismissError("tools")`).
 
 ## Running code
 

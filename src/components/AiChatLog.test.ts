@@ -1,5 +1,6 @@
 import { flushPromises, mount } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { nextTick } from "vue";
 import { componentAi } from "../../test/component-ai";
 import type { Ai } from "../ai";
 import AiChatLog from "./AiChatLog.vue";
@@ -44,9 +45,27 @@ describe("AiChatLog", () => {
     await flushPromises();
     expect(w.find(".ai-error-headline").text()).toBe("BADGERS");
     expect(w.find(".ai-error-text").text()).toContain("Otters are queueing");
-    ai.state.error = { kind: "tools", message: "The den is closed" };
+    ai.state.error = { kind: "tools", message: "The den is closed.", failures: [] };
     await flushPromises();
     expect(w.find(".ai-error-headline").exists()).toBe(false);
+    expect(w.find(".ai-error-text").text()).toBe("The den is closed.");
+  });
+
+  it("names each failing server in its own sentence and keeps the raw error for the tooltip", async () => {
+    const ai = componentAi({ locale: "sk" });
+    await ai.init();
+    const w = mount(AiChatLog, { props: { ai }, attachTo: document.body });
+    await flushPromises();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    ai.state.error = { kind: "tools", message: "", failures: [{ id: "docs", name: "Docs", error: "Cannot reach the MCP server: offline" }, { id: "den", name: "den", error: "HTTP 502" }] };
+    await nextTick();
+    const sentences = w.findAll(".ai-error-text .ai-failure");
+    expect(sentences.map((s) => s.text())).toEqual(["Nástroje zo služby Docs nie sú dostupné.", "Nástroje zo služby den nie sú dostupné."]);
+    sentences[0]!.element.dispatchEvent(new MouseEvent("mouseenter"));
+    vi.advanceTimersByTime(400);
+    expect(document.querySelector(".ai-tooltip")?.textContent).toBe("Cannot reach the MCP server: offline");
+    w.unmount();
+    vi.useRealTimers();
   });
 
   it("attaches a suggestion's resources to the message it sends", async () => {

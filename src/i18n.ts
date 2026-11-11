@@ -170,7 +170,7 @@ export const en = {
     noConnections: "No AI provider is available.",
   },
   errors: {
-    tools: "The app's tools are unavailable: {message}",
+    tools: "Tools from {name} are unavailable.",
     storage: "Chats could not be stored: {message}",
     rejectedKey: "The key was rejected: {message}",
     auth: "Access denied",
@@ -358,7 +358,7 @@ export const sk: Messages = {
     noConnections: "Nie je dostupný žiadny poskytovateľ AI.",
   },
   errors: {
-    tools: "Nástroje aplikácie nie sú dostupné: {message}",
+    tools: "Nástroje zo služby {name} nie sú dostupné.",
     storage: "Chaty sa nepodarilo uložiť: {message}",
     rejectedKey: "Kľúč bol odmietnutý: {message}",
     auth: "Prístup zamietnutý",

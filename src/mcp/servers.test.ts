@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { McpClient } from "./client";
-import { createMcpServers, serverErrors } from "./servers";
+import { createMcpServers, failedServers } from "./servers";
 
 function rpcFetch() {
   return vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
@@ -49,8 +49,14 @@ describe("MCP servers", () => {
     expect(() => createMcpServers({ "my server": { url: "/mcp" } })).toThrow(/must be 1-32/);
   });
 
-  it("names the failing servers only when there are several", () => {
-    expect(serverErrors({ app: { info: null, error: "offline" } })).toBe("offline");
-    expect(serverErrors({ app: { info: null, error: "" }, docs: { info: null, error: "offline" } })).toBe("docs: offline");
+  it("names each server by its display name, falling back to the id", () => {
+    const client = resourceServer("den", vi.fn());
+    const servers = createMcpServers({ app: { url: "/api/mcp", name: "Docs" }, den: Object.assign(client, { name: "Den notes" }), river: { url: "/river" } });
+    expect(servers.names).toEqual({ app: "Docs", den: "Den notes", river: "river" });
+  });
+
+  it("lists the failing servers with their names and raw errors", () => {
+    expect(failedServers({ app: { name: "App", info: null, error: "" }, docs: { name: "Docs", info: null, error: "offline" } })).toEqual([{ id: "docs", name: "Docs", error: "offline" }]);
+    expect(failedServers({ app: { name: "App", info: null, error: "" } })).toEqual([]);
   });
 });
